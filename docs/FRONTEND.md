@@ -39,9 +39,13 @@ Os valores do dashboard deverão ser retornados já agregados pelo backend. O fr
 - Seleção independente de casa em cada perna.
 - Campos de stake, odd, comissão, cashback e aumento.
 - Edição de uma entrada existente.
+- Edição aberta em painel lateral sobre a página de histórico, sem navegar para "Nova surebet".
+- Marcação da operação como geradora de crédito, incluindo o valor esperado.
+- Marcação independente de cada perna como uso de crédito de aposta.
+- Seleção da surebet que originou o crédito consumido pela perna.
 - Resumo de investimento, retorno, lucro e ROI.
 
-O próximo refinamento previsto adicionará qualificação de promoção, crédito de aposta recebido e uso de crédito em uma perna.
+Somente operações marcadas como geradoras aparecem como origem de crédito. Quando uma operação consumidora for liquidada, o backend deverá liquidar o vínculo do crédito e concluir também o ciclo promocional da operação geradora.
 
 ## Regras de integração
 

@@ -52,6 +52,8 @@ Exemplo reduzido para criação de surebet:
 {
   "type": "SUREBET",
   "eventName": "Palmeiras x Corinthians",
+  "generatesBetCredit": true,
+  "expectedBetCredit": "50.00",
   "notes": "Entrada ao vivo",
   "legs": [
     {
@@ -60,7 +62,9 @@ Exemplo reduzido para criação de surebet:
       "odd": "3.0000",
       "commissionPercent": "0",
       "cashbackPercent": "0",
-      "increasePercent": "0"
+      "increasePercent": "0",
+      "usesBetCredit": true,
+      "creditSourceOperationId": "operation_qualifier_1"
     },
     {
       "bookmakerAccountId": "account_2",
@@ -75,6 +79,8 @@ Exemplo reduzido para criação de surebet:
 ```
 
 A resposta deve incluir `effectiveOdd`, `profitFactor`, resultados projetados, lucro garantido, ROI, total apostado e versão do motor de cálculo.
+
+`creditSourceOperationId` só pode referenciar uma operação do mesmo usuário marcada com `generatesBetCredit=true`. Ao liquidar a operação consumidora, o backend deve concluir atomicamente o vínculo de crédito e o ciclo promocional da operação geradora, preservando o resultado financeiro individual de cada uma.
 
 ## Dashboard
 
