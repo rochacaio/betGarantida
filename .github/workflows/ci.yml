@@ -32,6 +32,9 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      - run: npm run prisma:generate --workspace betgarantida-api
+      - run: npm run build --workspace @betgarantida/contracts
+      - run: npm run build --workspace @betgarantida/calculation-engine
       - run: npm run prisma:migrate:deploy --workspace betgarantida-api
       - run: npm run lint
       - run: npm run typecheck
