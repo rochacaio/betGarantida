@@ -17,6 +17,7 @@ import {
   OperationCreditUnavailableError,
   OperationCreditReservedError,
   OperationCreditCorrectionUnavailableError,
+  OperationDeleteCreditInUseError,
   OperationIdempotencyConflictError,
   OperationInsufficientBalanceError,
   OperationInvalidSettlementError,
@@ -226,7 +227,7 @@ export class PrismaOperationsRepository implements OperationsRepository {
     const rows = await this.prisma.operation.findMany({
       where: {
         userId: input.userId,
-        status: input.status,
+        status: input.status ?? { not: OperationStatus.CANCELLED },
         createdAt:
           input.from || input.to
             ? { gte: input.from, lte: input.to }
@@ -604,6 +605,152 @@ export class PrismaOperationsRepository implements OperationsRepository {
             input.idempotencyKey,
             input.requestHash,
             "CORRECT_GENERATED_CREDIT",
+          );
+          return tx.operation.findUniqueOrThrow({
+            where: { id: operation.id },
+            include,
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    );
+  }
+
+  deleteOperation(input: {
+    userId: string;
+    operationId: string;
+    version: number;
+    idempotencyKey: string;
+    requestHash: string;
+  }) {
+    return this.serializable(() =>
+      this.prisma.$transaction(
+        async (tx) => {
+          const replay = await this.idempotentReplay(
+            tx,
+            input.userId,
+            input.idempotencyKey,
+            input.requestHash,
+          );
+          if (replay) return replay;
+          await this.lockOperation(tx, input.userId, input.operationId);
+          const operation = await tx.operation.findFirst({
+            where: { id: input.operationId, userId: input.userId },
+            include,
+          });
+          if (!operation || operation.status === OperationStatus.CANCELLED)
+            throw new OperationNotFoundError();
+          if (operation.version !== input.version)
+            throw new OperationStaleVersionError();
+          if (operation.generatedCredit?.consumerOperationId)
+            throw new OperationDeleteCreditInUseError();
+
+          const transactions = await tx.walletTransaction.findMany({
+            where: { operationId: operation.id, userId: input.userId },
+          });
+          const accountIds = [
+            ...new Set(
+              transactions.map((transaction) => transaction.bookmakerAccountId),
+            ),
+          ];
+          await this.lockAccountIds(tx, input.userId, accountIds);
+          const netByAccount = new Map<string, Prisma.Decimal>();
+          for (const transaction of transactions)
+            netByAccount.set(
+              transaction.bookmakerAccountId,
+              (
+                netByAccount.get(transaction.bookmakerAccountId) ??
+                new Prisma.Decimal(0)
+              ).add(transaction.amount),
+            );
+          for (const [accountId, netAmount] of netByAccount) {
+            if (netAmount.isZero()) continue;
+            const reversal = netAmount.neg();
+            await tx.walletTransaction.create({
+              data: {
+                userId: input.userId,
+                bookmakerAccountId: accountId,
+                operationId: operation.id,
+                type: WalletTransactionType.ADJUSTMENT,
+                amount: reversal,
+                idempotencyKey: `delete:${operation.id}:${accountId}`,
+                metadata: {
+                  reason: "Exclusão de surebet",
+                  reversedNetAmount: netAmount.toFixed(2),
+                },
+              },
+            });
+            await tx.bookmakerAccount.update({
+              where: { id: accountId },
+              data: {
+                cachedBalance: { increment: reversal },
+                version: { increment: 1 },
+              },
+            });
+          }
+
+          for (const credit of operation.consumedCredits) {
+            await tx.betCredit.update({
+              where: { id: credit.id },
+              data: {
+                status: BetCreditStatus.AVAILABLE,
+                consumerOperationId: null,
+                consumedAt: null,
+              },
+            });
+            await tx.operation.updateMany({
+              where: {
+                id: credit.sourceOperationId,
+                status: OperationStatus.SETTLED,
+              },
+              data: {
+                status: OperationStatus.WAITING_CREDIT_USE,
+                settledAt: null,
+                version: { increment: 1 },
+              },
+            });
+          }
+          if (operation.generatedCredit)
+            await tx.betCredit.update({
+              where: { id: operation.generatedCredit.id },
+              data: { status: BetCreditStatus.CANCELLED },
+            });
+
+          await tx.auditLog.create({
+            data: {
+              userId: input.userId,
+              action: "OPERATION_DELETED",
+              resourceType: "OPERATION",
+              resourceId: operation.id,
+              before: {
+                status: operation.status,
+                version: operation.version,
+              },
+              after: {
+                status: OperationStatus.CANCELLED,
+                version: operation.version + 1,
+              },
+              metadata: { reversedAccounts: accountIds },
+            },
+          });
+          await tx.operation.update({
+            where: { id: operation.id },
+            data: {
+              status: OperationStatus.CANCELLED,
+              settledAt: null,
+              realizedReturn: null,
+              realizedProfit: null,
+              realizedRoiPercent: null,
+              version: { increment: 1 },
+            },
+          });
+          await this.recordMutation(
+            tx,
+            input.userId,
+            operation.id,
+            input.idempotencyKey,
+            input.requestHash,
+            "DELETE",
           );
           return tx.operation.findUniqueOrThrow({
             where: { id: operation.id },

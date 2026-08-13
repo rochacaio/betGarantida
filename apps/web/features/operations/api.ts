@@ -67,6 +67,12 @@ export const operationsApi = {
       headers: commandHeaders(),
       body: JSON.stringify({ ...input, version }),
     }),
+  delete: (operation: { id: string; version: number }) =>
+    api<{ operation: ApiOperation }>(`/operations/${operation.id}`, {
+      method: "DELETE",
+      headers: commandHeaders(),
+      body: JSON.stringify({ version: operation.version }),
+    }),
   settle: (
     operation: { id: string; version: number },
     legs: Array<{ legId: string; result: "WON" | "LOST" }>,

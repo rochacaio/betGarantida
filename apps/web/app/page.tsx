@@ -430,7 +430,9 @@ function Dashboard({
     .format(monthDate)
     .replace(".", "");
   const changeMonth = (offset: number) => {
-    const next = new Date(Date.UTC(year ?? 2026, (monthNumber ?? 1) - 1 + offset, 1));
+    const next = new Date(
+      Date.UTC(year ?? 2026, (monthNumber ?? 1) - 1 + offset, 1),
+    );
     onMonthChange(
       `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}`,
     );
@@ -538,7 +540,9 @@ function Dashboard({
                   <span>08 {shortMonth}</span>
                   <span>15 {shortMonth}</span>
                   <span>22 {shortMonth}</span>
-                  <span>{daily.length} {shortMonth}</span>
+                  <span>
+                    {daily.length} {shortMonth}
+                  </span>
                 </div>
               </div>
             </div>
@@ -605,10 +609,12 @@ function SurebetTable({
   surebets,
   bookmakers,
   onEdit,
+  onDelete,
 }: {
   surebets: Surebet[];
   bookmakers: Bookmaker[];
   onEdit?: (s: Surebet) => void;
+  onDelete?: (s: Surebet) => void;
 }) {
   const statusLabel = (status: Surebet["status"]) =>
     status === "OPEN"
@@ -677,9 +683,21 @@ function SurebetTable({
                   </span>
                 </td>
                 <td>
-                  <button className="icon-button" onClick={() => onEdit?.(s)}>
-                    •••
-                  </button>
+                  <div className="surebet-actions">
+                    {onDelete && (
+                      <button
+                        type="button"
+                        className="delete-operation"
+                        onClick={() => onDelete(s)}
+                        aria-label={`Excluir ${s.event}`}
+                      >
+                        Excluir
+                      </button>
+                    )}
+                    <button className="icon-button" onClick={() => onEdit?.(s)}>
+                      •••
+                    </button>
+                  </div>
                 </td>
               </tr>
             );
@@ -727,9 +745,16 @@ function Bookmakers({
       setName("");
       setBalance("");
       setModal(false);
-      showToast("success", "Casa cadastrada", "A nova casa foi salva com sucesso.");
+      showToast(
+        "success",
+        "Casa cadastrada",
+        "A nova casa foi salva com sucesso.",
+      );
     } catch (failure) {
-      const message = errorMessage(failure, "Não foi possível cadastrar a casa.");
+      const message = errorMessage(
+        failure,
+        "Não foi possível cadastrar a casa.",
+      );
       setError(message);
       showToast("error", "Erro ao cadastrar casa", message);
     } finally {
@@ -746,7 +771,10 @@ function Bookmakers({
     try {
       setTransactions((await bookmakersApi.transactions(bookmaker.id)).data);
     } catch (failure) {
-      const message = errorMessage(failure, "Não foi possível carregar o extrato.");
+      const message = errorMessage(
+        failure,
+        "Não foi possível carregar o extrato.",
+      );
       setError(message);
       showToast("error", "Erro ao carregar extrato", message);
     }
@@ -792,9 +820,16 @@ function Bookmakers({
       setAction(undefined);
       setSelected(undefined);
       await onRefresh();
-      showToast("success", "Alteração concluída", `${actionTitle(action)} realizado com sucesso.`);
+      showToast(
+        "success",
+        "Alteração concluída",
+        `${actionTitle(action)} realizado com sucesso.`,
+      );
     } catch (failure) {
-      const message = errorMessage(failure, "Não foi possível concluir a movimentação.");
+      const message = errorMessage(
+        failure,
+        "Não foi possível concluir a movimentação.",
+      );
       setError(message);
       showToast("error", "Erro na movimentação", message);
     } finally {
@@ -808,9 +843,16 @@ function Bookmakers({
       await bookmakersApi.update(bookmaker, { status: "ARCHIVED" });
       setMenuId(undefined);
       await onRefresh();
-      showToast("success", "Casa arquivada", `${bookmaker.name} foi arquivada.`);
+      showToast(
+        "success",
+        "Casa arquivada",
+        `${bookmaker.name} foi arquivada.`,
+      );
     } catch (failure) {
-      const message = errorMessage(failure, "Não foi possível arquivar a casa.");
+      const message = errorMessage(
+        failure,
+        "Não foi possível arquivar a casa.",
+      );
       setError(message);
       showToast("error", "Erro ao arquivar", message);
     } finally {
@@ -834,9 +876,16 @@ function Bookmakers({
       setTransferAmount("");
       setTransferDescription("");
       await onRefresh();
-      showToast("success", "Transferência concluída", "Os saldos e extratos foram atualizados.");
+      showToast(
+        "success",
+        "Transferência concluída",
+        "Os saldos e extratos foram atualizados.",
+      );
     } catch (failure) {
-      const message = errorMessage(failure, "Não foi possível concluir a transferência.");
+      const message = errorMessage(
+        failure,
+        "Não foi possível concluir a transferência.",
+      );
       setError(message);
       showToast("error", "Erro na transferência", message);
     } finally {
@@ -850,9 +899,16 @@ function Bookmakers({
       await bookmakersApi.update(bookmaker, { status: "ACTIVE" });
       setMenuId(undefined);
       await onRefresh();
-      showToast("success", "Casa desarquivada", `${bookmaker.name} voltou a ficar ativa.`);
+      showToast(
+        "success",
+        "Casa desarquivada",
+        `${bookmaker.name} voltou a ficar ativa.`,
+      );
     } catch (failure) {
-      const message = errorMessage(failure, "Não foi possível desarquivar a casa.");
+      const message = errorMessage(
+        failure,
+        "Não foi possível desarquivar a casa.",
+      );
       setError(message);
       showToast("error", "Erro ao desarquivar", message);
     } finally {
@@ -1104,7 +1160,9 @@ function Bookmakers({
               <select
                 required
                 value={transferDestinationId}
-                onChange={(event) => setTransferDestinationId(event.target.value)}
+                onChange={(event) =>
+                  setTransferDestinationId(event.target.value)
+                }
               >
                 <option value="">Selecione a casa</option>
                 {bookmakers
@@ -1322,11 +1380,13 @@ function Surebets({
   bookmakers,
   navigate,
   save,
+  onDelete,
 }: {
   surebets: Surebet[];
   bookmakers: Bookmaker[];
   navigate: (s: Screen) => void;
   save: (s: Surebet, stay?: boolean) => Promise<void>;
+  onDelete: (s: Surebet) => Promise<void>;
 }) {
   const [editing, setEditing] = useState<Surebet>();
   return (
@@ -1366,6 +1426,14 @@ function Surebets({
             surebets={surebets}
             bookmakers={bookmakers}
             onEdit={setEditing}
+            onDelete={(surebet) => {
+              if (
+                window.confirm(
+                  `Excluir a surebet "${surebet.event}"? Os lançamentos serão estornados nas respectivas casas.`,
+                )
+              )
+                void onDelete(surebet);
+            }}
           />
         </article>
       </section>
@@ -1467,9 +1535,7 @@ function LegRow({
               step="0.01"
               placeholder="0,00"
               value={leg.stake}
-              readOnly={
-                !!leg.usesBetCredit && !!leg.creditSourceSurebetId
-              }
+              readOnly={!!leg.usesBetCredit && !!leg.creditSourceSurebetId}
               title={
                 leg.usesBetCredit && leg.creditSourceSurebetId
                   ? "O valor é definido pelo crédito de aposta selecionado."
@@ -1711,7 +1777,8 @@ function Editor({
   );
   const pendingCalculationLabel = (() => {
     const index = legs.findIndex(
-      (leg) => leg.stake === "" || leg.stake <= 0 || leg.odd === "" || leg.odd <= 1,
+      (leg) =>
+        leg.stake === "" || leg.stake <= 0 || leg.odd === "" || leg.odd <= 1,
     );
     if (index < 0) return "";
     const leg = legs[index]!;
@@ -2342,6 +2409,23 @@ export default function Home() {
     await bookmakersApi.create(name, Number(balance).toFixed(2));
     await refresh();
   };
+  const deleteSurebet = async (surebet: Surebet) => {
+    try {
+      await operationsApi.delete(surebet);
+      await refresh();
+      showToast(
+        "success",
+        "Surebet excluída",
+        "Os saldos das casas foram estornados com sucesso.",
+      );
+    } catch (failure) {
+      showToast(
+        "error",
+        "Não foi possível excluir",
+        errorMessage(failure, "Tente novamente."),
+      );
+    }
+  };
   const body = (() => {
     if (screen === "dashboard")
       return (
@@ -2369,6 +2453,7 @@ export default function Home() {
           bookmakers={bookmakers}
           navigate={navigate}
           save={save}
+          onDelete={deleteSurebet}
         />
       );
     return (

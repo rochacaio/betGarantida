@@ -91,6 +91,13 @@ export interface OperationsRepository {
     idempotencyKey: string;
     requestHash: string;
   }): Promise<OperationRecord>;
+  deleteOperation(input: {
+    userId: string;
+    operationId: string;
+    version: number;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<OperationRecord>;
 }
 
 export const OPERATIONS_REPOSITORY = Symbol("OPERATIONS_REPOSITORY");
@@ -108,4 +115,5 @@ export class OperationCreditUnavailableError extends Error {}
 export class OperationCreditReservedError extends Error {}
 export class OperationCreditCorrectionUnavailableError extends Error {}
 export class OperationInvalidSettlementError extends Error {}
+export class OperationDeleteCreditInUseError extends Error {}
 export class OperationIdempotencyConflictError extends Error {}

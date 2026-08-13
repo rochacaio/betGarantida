@@ -103,6 +103,7 @@ describe("OperationsService", () => {
       cancel: jest.fn(),
       settle: jest.fn(),
       correctGeneratedCredit: jest.fn(),
+      deleteOperation: jest.fn(),
     };
     service = new OperationsService(repository);
   });

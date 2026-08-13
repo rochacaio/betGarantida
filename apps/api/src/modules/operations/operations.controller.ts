@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Param,
@@ -22,6 +23,7 @@ import {
 import { OperationsService } from "./operations.service";
 import { SettleOperationDto } from "./dto/settle-operation.dto";
 import { CorrectGeneratedCreditDto } from "./dto/correct-generated-credit.dto";
+import { DeleteOperationDto } from "./dto/delete-operation.dto";
 
 @ApiTags("operations")
 @ApiCookieAuth("betgarantida_session")
@@ -106,6 +108,21 @@ export class OperationsController {
       user.id,
       id,
       dto,
+      idempotencyKey,
+    );
+  }
+
+  @Delete(":id")
+  deleteOperation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: DeleteOperationDto,
+    @Headers("idempotency-key") idempotencyKey = "",
+  ) {
+    return this.operations.deleteOperation(
+      user.id,
+      id,
+      dto.version,
       idempotencyKey,
     );
   }

@@ -29,6 +29,7 @@ import {
   OperationCreditUnavailableError,
   OperationCreditReservedError,
   OperationCreditCorrectionUnavailableError,
+  OperationDeleteCreditInUseError,
   OperationInsufficientBalanceError,
   OperationIdempotencyConflictError,
   OperationInvalidSettlementError,
@@ -270,6 +271,28 @@ export class OperationsService {
     };
   }
 
+  async deleteOperation(
+    userId: string,
+    id: string,
+    version: number,
+    idempotencyKey: string,
+  ) {
+    this.assertIdempotencyKey(idempotencyKey);
+    return {
+      operation: this.response(
+        await this.execute(() =>
+          this.repository.deleteOperation({
+            userId,
+            operationId: id,
+            version,
+            idempotencyKey,
+            requestHash: this.hash(["DELETE", id, version]),
+          }),
+        ),
+      ),
+    };
+  }
+
   private command(
     userId: string,
     dto: CreateOperationDto,
@@ -442,6 +465,12 @@ export class OperationsService {
           code: "BET_CREDIT_CORRECTION_UNAVAILABLE",
           message:
             "O crédito só pode ser corrigido enquanto aguarda uso e ainda não foi reservado por outra surebet.",
+        });
+      if (error instanceof OperationDeleteCreditInUseError)
+        throw new ConflictException({
+          code: "BET_CREDIT_IN_USE",
+          message:
+            "Este crédito está vinculado a outra surebet. Exclua primeiro a bet que utilizou o crédito.",
         });
       if (error instanceof OperationInvalidSettlementError)
         throw new ConflictException({
