@@ -71,6 +71,10 @@ web_modules/
 .env.*
 !.env.example
 
+# Prisma generated client and Nest build output
+apps/api/generated/
+apps/api/dist/
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache

@@ -44,6 +44,16 @@ Os valores do dashboard deverão ser retornados já agregados pelo backend. O fr
 - Marcação independente de cada perna como uso de crédito de aposta.
 - Seleção da surebet que originou o crédito consumido pela perna.
 - Resumo de investimento, retorno, lucro e ROI.
+- Balanceamento automático das stakes a partir da primeira linha e das odds efetivas.
+- Resultado individual de cada cenário exibido em verde para lucro e vermelho para prejuízo.
+- Alterações manuais em stakes calculadas desativam o rebalanceamento daquela linha e atualizam somente os resultados.
+- Validação obrigatória antes de salvar, com toastr para evento, casas, stakes, odds e campos condicionais de crédito.
+- Crédito de aposta usa retorno sem devolução da stake: `stake × profitFactor`; o valor promocional não entra no capital real investido nem no denominador do ROI.
+- Liquidação na edição: todas as pernas devem ser marcadas como `WON` ou `LOST`; a finalização calcula o resultado realizado e muda a operação para `SETTLED`.
+- Operações geradoras perguntam na liquidação se o crédito foi concedido. Quando positivo, usam `WAITING_CREDIT_USE`; somente depois da liquidação da operação consumidora ambas passam a `SETTLED`.
+- A operação consumidora exibe `combinedPromotionProfit`, que soma seu resultado à qualificação que originou o crédito.
+- Ao salvar, stakes em dinheiro são debitadas das casas; edições reconciliam a reserva anterior; na liquidação, payouts vencedores são creditados. Stakes promocionais não debitam dinheiro real.
+- O frontend bloqueia uma nova reserva quando o saldo disponível da casa é insuficiente.
 
 Somente operações marcadas como geradoras aparecem como origem de crédito. Quando uma operação consumidora for liquidada, o backend deverá liquidar o vínculo do crédito e concluir também o ciclo promocional da operação geradora.
 

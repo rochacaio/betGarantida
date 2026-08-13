@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://betgarantida.app"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   title: "BetGarantida — Controle de apostas",
   description: "Calcule, registre e acompanhe suas surebets e saldos por casa de aposta.",
   openGraph: {

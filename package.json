@@ -1,0 +1,22 @@
+{
+  "name": "betgarantida",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @betgarantida/contracts && npm run build --workspace @betgarantida/calculation-engine && npm run build --workspace betgarantida-api && npm run build --workspace betgarantida-web",
+    "build:api": "npm run build --workspace betgarantida-api",
+    "build:web": "npm run build --workspace betgarantida-web",
+    "dev:api": "npm run dev --workspace betgarantida-api",
+    "dev:web": "npm run dev --workspace betgarantida-web",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}

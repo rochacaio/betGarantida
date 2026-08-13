@@ -1,0 +1,271 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+  DISABLED
+}
+
+enum BookmakerAccountStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum WalletTransactionType {
+  INITIAL_BALANCE
+  DEPOSIT
+  WITHDRAWAL
+  BET_STAKE
+  BET_RETURN
+  BET_REFUND
+  BONUS_RECEIVED
+  BONUS_USED
+  ADJUSTMENT
+}
+
+enum OperationType {
+  SUREBET
+}
+
+enum OperationStatus {
+  OPEN
+  WAITING_CREDIT_USE
+  SETTLED
+  CANCELLED
+}
+
+enum BetLegResult {
+  PENDING
+  WON
+  LOST
+}
+
+enum BetCreditStatus {
+  EXPECTED
+  AVAILABLE
+  NOT_GRANTED
+  CONSUMED
+  EXPIRED
+  CANCELLED
+}
+
+enum AuthRateLimitAction {
+  LOGIN
+  PASSWORD_RECOVERY
+  PASSWORD_RESET
+}
+
+model User {
+  id                  String               @id @default(uuid()) @db.Uuid
+  email               String               @unique @db.VarChar(320)
+  cpfHash             String               @unique @map("cpf_hash") @db.VarChar(64)
+  cpfEncrypted        String               @map("cpf_encrypted") @db.Text
+  passwordHash        String               @map("password_hash") @db.Text
+  status              UserStatus           @default(ACTIVE)
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  sessions            Session[]
+  passwordResetTokens PasswordResetToken[]
+  bookmakerAccounts   BookmakerAccount[]
+  walletTransactions  WalletTransaction[]
+  operations          Operation[]
+  betCredits          BetCredit[]
+  auditLogs           AuditLog[]
+
+  @@map("users")
+}
+
+model Session {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash") @db.VarChar(64)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(3)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model AuthRateLimit {
+  id           String              @id @default(uuid()) @db.Uuid
+  keyHash      String              @map("key_hash") @db.VarChar(64)
+  action       AuthRateLimitAction
+  attempts     Int                 @default(0)
+  windowStart  DateTime            @map("window_start") @db.Timestamptz(3)
+  blockedUntil DateTime?           @map("blocked_until") @db.Timestamptz(3)
+  updatedAt    DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([keyHash, action])
+  @@index([blockedUntil])
+  @@map("auth_rate_limits")
+}
+
+model BookmakerAccount {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  userId             String                 @map("user_id") @db.Uuid
+  name               String                 @db.VarChar(120)
+  nickname           String?                @db.VarChar(120)
+  currency           String                 @default("BRL") @db.Char(3)
+  status             BookmakerAccountStatus @default(ACTIVE)
+  cachedBalance      Decimal                @default(0) @map("cached_balance") @db.Decimal(19, 2)
+  version            Int                    @default(1)
+  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user               User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  walletTransactions WalletTransaction[]
+  betLegs            BetLeg[]
+
+  @@index([userId, status])
+  @@map("bookmaker_accounts")
+}
+
+model WalletTransaction {
+  id                 String                @id @default(uuid()) @db.Uuid
+  userId             String                @map("user_id") @db.Uuid
+  bookmakerAccountId String                @map("bookmaker_account_id") @db.Uuid
+  operationId        String?               @map("operation_id") @db.Uuid
+  legId              String?               @map("leg_id") @db.Uuid
+  type               WalletTransactionType
+  amount             Decimal               @db.Decimal(19, 2)
+  idempotencyKey     String                @map("idempotency_key") @db.VarChar(160)
+  occurredAt         DateTime              @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  metadata           Json?
+  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  user               User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  bookmakerAccount   BookmakerAccount      @relation(fields: [bookmakerAccountId], references: [id], onDelete: Restrict)
+  operation          Operation?            @relation(fields: [operationId], references: [id], onDelete: Restrict)
+  leg                BetLeg?               @relation(fields: [legId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, idempotencyKey])
+  @@index([bookmakerAccountId, occurredAt])
+  @@index([operationId])
+  @@index([legId])
+  @@map("wallet_transactions")
+}
+
+model Operation {
+  id                  String              @id @default(uuid()) @db.Uuid
+  userId              String              @map("user_id") @db.Uuid
+  sequenceNumber      Int                 @map("sequence_number")
+  type                OperationType       @default(SUREBET)
+  eventName           String              @map("event_name") @db.VarChar(240)
+  notes               String?             @db.Text
+  status              OperationStatus     @default(OPEN)
+  generatesBetCredit  Boolean             @default(false) @map("generates_bet_credit")
+  realCashInvestment  Decimal             @map("real_cash_investment") @db.Decimal(19, 2)
+  promotionalStake    Decimal             @default(0) @map("promotional_stake") @db.Decimal(19, 2)
+  protectedReturn     Decimal             @map("protected_return") @db.Decimal(19, 2)
+  projectedProfit     Decimal             @map("projected_profit") @db.Decimal(19, 2)
+  projectedRoiPercent Decimal             @map("projected_roi_percent") @db.Decimal(19, 6)
+  realizedReturn      Decimal?            @map("realized_return") @db.Decimal(19, 2)
+  realizedProfit      Decimal?            @map("realized_profit") @db.Decimal(19, 2)
+  realizedRoiPercent  Decimal?            @map("realized_roi_percent") @db.Decimal(19, 6)
+  engineVersion       String              @map("engine_version") @db.VarChar(32)
+  version             Int                 @default(1)
+  openedAt            DateTime            @default(now()) @map("opened_at") @db.Timestamptz(3)
+  settledAt           DateTime?           @map("settled_at") @db.Timestamptz(3)
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user                User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  legs                BetLeg[]
+  walletTransactions  WalletTransaction[]
+  generatedCredit     BetCredit?          @relation("CreditSource")
+  consumedCredits     BetCredit[]         @relation("CreditConsumer")
+
+  @@unique([userId, sequenceNumber])
+  @@index([userId, status, createdAt])
+  @@index([userId, settledAt])
+  @@map("operations")
+}
+
+model BetLeg {
+  id                 String              @id @default(uuid()) @db.Uuid
+  operationId        String              @map("operation_id") @db.Uuid
+  bookmakerAccountId String              @map("bookmaker_account_id") @db.Uuid
+  betCreditId        String?             @unique @map("bet_credit_id") @db.Uuid
+  position           Int
+  stake              Decimal             @db.Decimal(19, 2)
+  odd                Decimal             @db.Decimal(19, 6)
+  commissionPercent  Decimal             @default(0) @map("commission_percent") @db.Decimal(9, 6)
+  cashbackPercent    Decimal             @default(0) @map("cashback_percent") @db.Decimal(9, 6)
+  increasePercent    Decimal             @default(0) @map("increase_percent") @db.Decimal(9, 6)
+  usesBetCredit      Boolean             @default(false) @map("uses_bet_credit")
+  result             BetLegResult        @default(PENDING)
+  profitFactor       Decimal             @map("profit_factor") @db.Decimal(19, 6)
+  effectiveOdd       Decimal             @map("effective_odd") @db.Decimal(19, 6)
+  projectedPayout    Decimal             @map("projected_payout") @db.Decimal(19, 2)
+  scenarioResult     Decimal             @map("scenario_result") @db.Decimal(19, 2)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  operation          Operation           @relation(fields: [operationId], references: [id], onDelete: Restrict)
+  bookmakerAccount   BookmakerAccount    @relation(fields: [bookmakerAccountId], references: [id], onDelete: Restrict)
+  betCredit          BetCredit?          @relation(fields: [betCreditId], references: [id], onDelete: Restrict)
+  walletTransactions WalletTransaction[]
+
+  @@unique([operationId, position])
+  @@index([bookmakerAccountId])
+  @@map("bet_legs")
+}
+
+model BetCredit {
+  id                  String          @id @default(uuid()) @db.Uuid
+  userId              String          @map("user_id") @db.Uuid
+  sourceOperationId   String          @unique @map("source_operation_id") @db.Uuid
+  consumerOperationId String?         @map("consumer_operation_id") @db.Uuid
+  expectedAmount      Decimal         @map("expected_amount") @db.Decimal(19, 2)
+  grantedAmount       Decimal?        @map("granted_amount") @db.Decimal(19, 2)
+  status              BetCreditStatus @default(EXPECTED)
+  consumedAt          DateTime?       @map("consumed_at") @db.Timestamptz(3)
+  expiresAt           DateTime?       @map("expires_at") @db.Timestamptz(3)
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user                User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  sourceOperation     Operation       @relation("CreditSource", fields: [sourceOperationId], references: [id], onDelete: Restrict)
+  consumerOperation   Operation?      @relation("CreditConsumer", fields: [consumerOperationId], references: [id], onDelete: Restrict)
+  consumingLeg        BetLeg?
+
+  @@index([userId, status])
+  @@index([consumerOperationId])
+  @@map("bet_credits")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  action       String   @db.VarChar(80)
+  resourceType String   @map("resource_type") @db.VarChar(80)
+  resourceId   String   @map("resource_id") @db.Uuid
+  before       Json?
+  after        Json?
+  metadata     Json?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, resourceType, resourceId, createdAt])
+  @@map("audit_logs")
+}
