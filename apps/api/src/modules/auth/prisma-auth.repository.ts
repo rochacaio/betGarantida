@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { Prisma, UserStatus } from "@prisma/client";
 import { PrismaService } from "../../database/prisma.service";
+import { currentRequestId } from "../../request-context.store";
 import {
   ActiveSession,
   AuthRepository,
@@ -60,12 +61,36 @@ export class PrismaAuthRepository implements AuthRepository {
         },
         select: { id: true },
       });
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "USER_REGISTERED",
+          resourceType: "USER",
+          resourceId: user.id,
+          metadata: { requestId: currentRequestId() ?? "unknown" },
+        },
+      });
       return { user, sessionId: session.id };
     });
   }
 
   createSession(input: CreateSessionInput): Promise<{ id: string }> {
-    return this.prisma.session.create({ data: input, select: { id: true } });
+    return this.prisma.$transaction(async (tx) => {
+      const session = await tx.session.create({
+        data: input,
+        select: { id: true },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: input.userId,
+          action: "AUTH_LOGIN",
+          resourceType: "USER",
+          resourceId: input.userId,
+          metadata: { requestId: currentRequestId() ?? "unknown" },
+        },
+      });
+      return session;
+    });
   }
 
   findActiveSession(
@@ -162,6 +187,18 @@ export class PrismaAuthRepository implements AuthRepository {
             revokedAt: null,
           },
           data: { revokedAt: input.now },
+        });
+        await tx.auditLog.create({
+          data: {
+            userId: token.userId,
+            action: "PASSWORD_CHANGED",
+            resourceType: "USER",
+            resourceId: token.userId,
+            metadata: {
+              requestId: currentRequestId() ?? "unknown",
+              sessionsRevoked: true,
+            },
+          },
         });
         return true;
       },

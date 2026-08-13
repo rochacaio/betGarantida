@@ -10,10 +10,13 @@ import {
 import { calculateSettlement } from "@betgarantida/calculation-engine";
 import { randomUUID } from "node:crypto";
 import { PrismaService } from "../../database/prisma.service";
+import { currentRequestId } from "../../request-context.store";
 import {
   ListOperationsInput,
   OperationAccountError,
   OperationCreditUnavailableError,
+  OperationCreditReservedError,
+  OperationCreditCorrectionUnavailableError,
   OperationIdempotencyConflictError,
   OperationInsufficientBalanceError,
   OperationInvalidSettlementError,
@@ -69,14 +72,22 @@ export class PrismaOperationsRepository implements OperationsRepository {
           });
           await this.reserveCredits(tx, command, operation.id);
           await this.createLegsAndDebits(tx, command, operation.id, "create");
-          if (command.generatesBetCredit)
-            await tx.betCredit.create({
+          if (command.generatesBetCredit) {
+            const credit = await tx.betCredit.create({
               data: {
                 userId: command.userId,
                 sourceOperationId: operation.id,
                 expectedAmount: command.expectedBetCredit!,
               },
             });
+            await this.auditCredit(
+              tx,
+              command.userId,
+              credit.id,
+              "BET_CREDIT_EXPECTED",
+              { sourceOperationId: operation.id },
+            );
+          }
           await this.recordMutation(
             tx,
             command.userId,
@@ -436,6 +447,14 @@ export class PrismaOperationsRepository implements OperationsRepository {
                   grantedAmount: input.grantedCreditAmount,
                 },
               });
+              if (operation.generatedCredit)
+                await this.auditCredit(
+                  tx,
+                  input.userId,
+                  operation.generatedCredit.id,
+                  "BET_CREDIT_GRANTED",
+                  { grantedAmount: input.grantedCreditAmount.toFixed(2) },
+                );
               status = OperationStatus.WAITING_CREDIT_USE;
               settledAt = null;
             } else {
@@ -443,6 +462,13 @@ export class PrismaOperationsRepository implements OperationsRepository {
                 where: { sourceOperationId: operation.id },
                 data: { status: BetCreditStatus.NOT_GRANTED },
               });
+              if (operation.generatedCredit)
+                await this.auditCredit(
+                  tx,
+                  input.userId,
+                  operation.generatedCredit.id,
+                  "BET_CREDIT_NOT_GRANTED",
+                );
             }
           }
 
@@ -464,6 +490,14 @@ export class PrismaOperationsRepository implements OperationsRepository {
               where: { id: { in: consumedIds } },
               data: { status: BetCreditStatus.CONSUMED, consumedAt: now },
             });
+            for (const credit of credits)
+              await this.auditCredit(
+                tx,
+                input.userId,
+                credit.id,
+                "BET_CREDIT_CONSUMED",
+                { consumerOperationId: operation.id },
+              );
             await tx.operation.updateMany({
               where: {
                 id: {
@@ -496,6 +530,80 @@ export class PrismaOperationsRepository implements OperationsRepository {
             input.idempotencyKey,
             input.requestHash,
             "SETTLE",
+          );
+          return tx.operation.findUniqueOrThrow({
+            where: { id: operation.id },
+            include,
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    );
+  }
+
+  correctGeneratedCredit(input: {
+    userId: string;
+    operationId: string;
+    version: number;
+    grantedCreditAmount: Prisma.Decimal;
+    idempotencyKey: string;
+    requestHash: string;
+  }) {
+    return this.serializable(() =>
+      this.prisma.$transaction(
+        async (tx) => {
+          const replay = await this.idempotentReplay(
+            tx,
+            input.userId,
+            input.idempotencyKey,
+            input.requestHash,
+          );
+          if (replay) return replay;
+          await this.lockOperation(tx, input.userId, input.operationId);
+          const operation = await tx.operation.findFirst({
+            where: { id: input.operationId, userId: input.userId },
+            include,
+          });
+          if (!operation) throw new OperationNotFoundError();
+          if (operation.version !== input.version)
+            throw new OperationStaleVersionError();
+          if (
+            operation.status !== OperationStatus.WAITING_CREDIT_USE ||
+            !operation.generatedCredit ||
+            operation.generatedCredit.status !== BetCreditStatus.AVAILABLE ||
+            operation.generatedCredit.consumerOperationId !== null
+          )
+            throw new OperationCreditCorrectionUnavailableError();
+
+          await tx.betCredit.update({
+            where: { id: operation.generatedCredit.id },
+            data: {
+              expectedAmount: input.grantedCreditAmount,
+              grantedAmount: input.grantedCreditAmount,
+            },
+          });
+          await tx.operation.update({
+            where: { id: operation.id },
+            data: { version: { increment: 1 } },
+          });
+          await this.auditCredit(
+            tx,
+            input.userId,
+            operation.generatedCredit.id,
+            "BET_CREDIT_AMOUNT_CORRECTED",
+            {
+              previousAmount:
+                operation.generatedCredit.grantedAmount?.toFixed(2) ?? "",
+              grantedAmount: input.grantedCreditAmount.toFixed(2),
+            },
+          );
+          await this.recordMutation(
+            tx,
+            input.userId,
+            operation.id,
+            input.idempotencyKey,
+            input.requestHash,
+            "CORRECT_GENERATED_CREDIT",
           );
           return tx.operation.findUniqueOrThrow({
             where: { id: operation.id },
@@ -616,7 +724,9 @@ export class PrismaOperationsRepository implements OperationsRepository {
     command: OperationWriteCommand,
     operationId: string,
   ) {
-    for (const leg of command.legs.filter((item) => item.usesBetCredit)) {
+    for (const leg of command.legs.filter(
+      (item) => item.usesBetCredit && !item.usesFreeBetCredit,
+    )) {
       if (!leg.betCreditId) throw new OperationCreditUnavailableError();
       await tx.$queryRaw(
         Prisma.sql`SELECT "id" FROM "bet_credits" WHERE "id" = ${leg.betCreditId}::uuid FOR UPDATE`,
@@ -626,24 +736,42 @@ export class PrismaOperationsRepository implements OperationsRepository {
           id: leg.betCreditId,
           userId: command.userId,
           status: BetCreditStatus.AVAILABLE,
-          consumerOperationId: null,
         },
       });
+      if (
+        credit?.consumerOperationId &&
+        credit.consumerOperationId !== operationId
+      )
+        throw new OperationCreditReservedError();
       if (
         !credit ||
         credit.sourceOperationId === operationId ||
         !credit.grantedAmount?.eq(leg.stake)
       )
         throw new OperationCreditUnavailableError();
-      const reserved = await tx.betCredit.updateMany({
-        where: {
-          id: credit.id,
-          status: BetCreditStatus.AVAILABLE,
-          consumerOperationId: null,
-        },
-        data: { consumerOperationId: operationId },
-      });
-      if (reserved.count !== 1) throw new OperationCreditUnavailableError();
+      if (credit.consumerOperationId === null) {
+        const reserved = await tx.betCredit.updateMany({
+          where: {
+            id: credit.id,
+            status: BetCreditStatus.AVAILABLE,
+            consumerOperationId: null,
+          },
+          data: { consumerOperationId: operationId },
+        });
+        if (reserved.count !== 1) throw new OperationCreditUnavailableError();
+        await tx.auditLog.create({
+          data: {
+            userId: command.userId,
+            action: "BET_CREDIT_RESERVED",
+            resourceType: "BET_CREDIT",
+            resourceId: credit.id,
+            metadata: {
+              requestId: currentRequestId() ?? "unknown",
+              consumerOperationId: operationId,
+            },
+          },
+        });
+      }
     }
   }
 
@@ -712,13 +840,36 @@ export class PrismaOperationsRepository implements OperationsRepository {
     requestHash: string,
     action: string,
   ) {
-    return tx.operationMutation.create({
+    return Promise.all([
+      tx.operationMutation.create({
+        data: { userId, operationId, idempotencyKey, requestHash, action },
+      }),
+      tx.auditLog.create({
+        data: {
+          userId,
+          action: `OPERATION_${action}`,
+          resourceType: "OPERATION",
+          resourceId: operationId,
+          metadata: { requestId: currentRequestId() ?? "unknown" },
+        },
+      }),
+    ]);
+  }
+
+  private auditCredit(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    creditId: string,
+    action: string,
+    metadata: Record<string, string> = {},
+  ) {
+    return tx.auditLog.create({
       data: {
         userId,
-        operationId,
-        idempotencyKey,
-        requestHash,
         action,
+        resourceType: "BET_CREDIT",
+        resourceId: creditId,
+        metadata: { requestId: currentRequestId() ?? "unknown", ...metadata },
       },
     });
   }

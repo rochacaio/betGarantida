@@ -12,6 +12,7 @@ import {
   BookmakerAccountRecord,
   CreateAccountCommand,
   FinancialCommand,
+  TransferCommand,
   WalletRepository,
   WalletTransactionRecord,
 } from "../src/modules/wallets/wallet.types";
@@ -47,10 +48,41 @@ class MemoryWalletRepository implements WalletRepository {
     this.lastFinancialCommand = command;
     const previous = this.requests.get(command.idempotencyKey);
     if (previous) return Promise.resolve(previous.result);
-    this.balance = this.balance.add(command.amount);
+    const transactionAmount = command.targetBalance
+      ? command.targetBalance.sub(this.balance)
+      : command.amount;
+    this.balance = command.targetBalance ?? this.balance.add(command.amount);
     const result = {
-      transaction: this.transaction(command.type, command.amount),
+      transaction: this.transaction(command.type, transactionAmount),
       resultingBalance: this.balance,
+      replayed: false,
+      requestHash: command.requestHash,
+    };
+    this.requests.set(command.idempotencyKey, {
+      hash: command.requestHash,
+      result: { ...result, replayed: true },
+    });
+    return Promise.resolve(result);
+  }
+
+  transfer(command: TransferCommand) {
+    const previous = this.requests.get(command.idempotencyKey);
+    if (previous) return Promise.resolve(previous.result);
+    const sourceBalance = this.balance.sub(command.amount);
+    if (sourceBalance.isNegative())
+      return Promise.reject(new Error("insufficient test balance"));
+    this.balance = sourceBalance;
+    const result = {
+      debitTransaction: this.transaction(
+        WalletTransactionType.TRANSFER_OUT,
+        command.amount.negated(),
+      ),
+      creditTransaction: this.transaction(
+        WalletTransactionType.TRANSFER_IN,
+        command.amount,
+      ),
+      sourceBalance,
+      destinationBalance: command.amount,
       replayed: false,
       requestHash: command.requestHash,
     };
@@ -146,25 +178,41 @@ describe("WalletService", () => {
     expect(repository.lastFinancialCommand?.amount.toFixed(2)).toBe("-40.00");
   });
 
-  it("requires a non-zero adjustment and marks it for audit", async () => {
-    expect(() =>
-      service.adjust({
-        userId: "user-1",
-        bookmakerAccountId: "account-1",
-        amount: "0.00",
-        reason: "Correção",
-        idempotencyKey: "adjustment-01",
-      }),
-    ).toThrow(UnprocessableEntityException);
-
+  it("defines the final balance and records only the difference as adjustment", async () => {
+    repository.balance = new Prisma.Decimal("300.00");
     await service.adjust({
       userId: "user-1",
       bookmakerAccountId: "account-1",
-      amount: "10.00",
+      amount: "120.00",
       reason: "Correção de saldo",
       idempotencyKey: "adjustment-02",
     });
     expect(repository.lastFinancialCommand?.auditAdjustment).toBe(true);
+    expect(repository.lastFinancialCommand?.targetBalance?.toFixed(2)).toBe(
+      "120.00",
+    );
+    expect(repository.balance.toFixed(2)).toBe("120.00");
+  });
+
+  it("permite ajustar o saldo final para zero, mas não para negativo", async () => {
+    repository.balance = new Prisma.Decimal("50.00");
+    await service.adjust({
+      userId: "user-1",
+      bookmakerAccountId: "account-1",
+      amount: "0.00",
+      reason: "Conferência",
+      idempotencyKey: "adjustment-zero",
+    });
+    expect(repository.balance.toFixed(2)).toBe("0.00");
+    expect(() =>
+      service.adjust({
+        userId: "user-1",
+        bookmakerAccountId: "account-1",
+        amount: "-1.00",
+        reason: "Inválido",
+        idempotencyKey: "adjustment-negative",
+      }),
+    ).toThrow(UnprocessableEntityException);
   });
 
   it("returns the same effect for an idempotent replay", async () => {
@@ -178,6 +226,36 @@ describe("WalletService", () => {
     const second = await service.deposit(command);
     expect(first.availableBalance).toBe(second.availableBalance);
     expect(second.idempotentReplay).toBe(true);
+  });
+
+  it("transfers the value between different bookmaker accounts", async () => {
+    repository.balance = new Prisma.Decimal("200.00");
+    const result = await service.transfer({
+      userId: "user-1",
+      sourceBookmakerAccountId: "11111111-1111-4111-8111-111111111111",
+      destinationBookmakerAccountId: "22222222-2222-4222-8222-222222222222",
+      amount: "75.50",
+      description: "Troca de casa",
+      idempotencyKey: "transfer-0001",
+    });
+    expect(result).toMatchObject({
+      sourceBalance: "124.50",
+      destinationBalance: "75.50",
+      idempotentReplay: false,
+    });
+    expect(repository.balance.toFixed(2)).toBe("124.50");
+  });
+
+  it("rejects transfers to the same bookmaker account", async () => {
+    await expect(
+      service.transfer({
+        userId: "user-1",
+        sourceBookmakerAccountId: "11111111-1111-4111-8111-111111111111",
+        destinationBookmakerAccountId: "11111111-1111-4111-8111-111111111111",
+        amount: "10.00",
+        idempotencyKey: "transfer-same-account",
+      }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
   it("rejects reusing an idempotency key with another payload", async () => {

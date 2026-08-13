@@ -6,6 +6,7 @@
 - Listar e editar metadados da conta.
 - Registrar depósito, saque e ajuste explícito.
 - Consultar extrato paginado.
+- Transferir saldo entre duas casas ativas do mesmo usuário.
 - Exibir saldo disponível, valor em apostas abertas e patrimônio por casa.
 
 ## Ledger
@@ -29,6 +30,7 @@ O `cachedBalance` pode acelerar leituras, mas é atualizado na mesma transação
 - Casas com histórico não são apagadas; são arquivadas.
 - Saque não pode tornar saldo negativo.
 - Ajuste exige motivo e gera auditoria.
+- Ajuste define o saldo final informado; o ledger registra somente a diferença entre o saldo anterior e o novo. Depósito soma e saque subtrai.
 - Uma operação com várias pernas na mesma casa soma todas as stakes em dinheiro antes da validação.
 
 ## Efeitos das operações
@@ -46,5 +48,7 @@ Todos os efeitos possuem chave idempotente determinística por operação, revis
 - Repetir criação, edição ou liquidação não altera o saldo duas vezes.
 - Uma falha em qualquer lançamento desfaz toda a operação.
 - O extrato explica integralmente o saldo mostrado.
+- Uma transferência é atômica: cria `TRANSFER_OUT` na origem e `TRANSFER_IN`
+  no destino, ambos vinculados pelo mesmo `transferId`. A origem precisa ter
+  saldo suficiente e origem/destino devem ser contas diferentes e ativas.
 - O backend rejeita concorrência que use o mesmo saldo simultaneamente além do disponível.
-

@@ -25,7 +25,7 @@ Componentes não chamam `fetch` diretamente. O cliente usa caminhos relativos `/
 | Login/cadastro | `/auth/me` | register, login, logout |
 | Recuperação | — | password-recovery, password-reset |
 | Dashboard | `/dashboard/monthly` | — |
-| Casas | contas e extrato | criar, editar, depositar, sacar, ajustar |
+| Casas | contas e extrato | criar, editar, depositar, sacar, ajustar, transferir |
 | Minhas entradas | lista e detalhe | editar, cancelar, liquidar |
 | Nova surebet | casas e créditos disponíveis | preview e criar |
 
@@ -59,5 +59,5 @@ Durante a migração, uma flag local pode escolher mock ou API por domínio. Nã
 - [ ] Saldos reconciliam após criar, editar, cancelar e liquidar.
 - [ ] Ciclo de crédito completo funciona sem manipulação manual de banco.
 - [ ] Dashboard usa apenas agregados da API.
-- [ ] `betgarantida-demo` e constantes demonstrativas foram removidos.
+- [x] `betgarantida-demo` e constantes demonstrativas foram removidos.
 - [ ] Testes E2E críticos passam contra ambiente limpo.

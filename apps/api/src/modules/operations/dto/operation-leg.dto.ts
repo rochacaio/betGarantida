@@ -42,6 +42,10 @@ export class OperationLegDto {
   @IsBoolean()
   usesBetCredit?: boolean;
 
+  @IsOptional()
+  @IsBoolean()
+  usesFreeBetCredit?: boolean;
+
   @Transform(trimString)
   @IsOptional()
   @IsUUID()

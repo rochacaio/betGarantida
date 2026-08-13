@@ -46,7 +46,7 @@ OPEN -> CANCELLED
 
 ### BetLeg
 
-`id`, `operationId`, `bookmakerAccountId`, `position`, `stake`, `odd`, `commissionPercent`, `cashbackPercent`, `increasePercent`, `usesBetCredit`, `result`, snapshots de cálculo e timestamps.
+`id`, `operationId`, `bookmakerAccountId`, `position`, `stake`, `odd`, `commissionPercent`, `cashbackPercent`, `increasePercent`, `usesBetCredit`, `usesFreeBetCredit`, `result`, snapshots de cálculo e timestamps.
 
 Resultados iniciais: `PENDING`, `WON`, `LOST`. `VOID`, `CASHOUT` e resultados parciais exigirão regras financeiras próprias antes de serem habilitados.
 
@@ -74,4 +74,3 @@ Estados: `EXPECTED`, `AVAILABLE`, `NOT_GRANTED`, `CONSUMED`, `EXPIRED`, `CANCELL
 - Únicos: email normalizado, hash de CPF, `(userId, sequenceNumber)`, `sourceOperationId` em BetCredit e chaves idempotentes no respectivo escopo.
 - Índices: operações por `(userId, status, createdAt)`, por `(userId, settledAt)`, ledger por `(bookmakerAccountId, occurredAt)` e créditos por `(userId, status)`.
 - Chave estrangeira de `consumerOperationId` e bloqueio transacional ao consumir crédito.
-

@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 import {
   BookmakerAccountStatus,
   Prisma,
@@ -10,6 +11,8 @@ import {
   CreateAccountCommand,
   FinancialCommand,
   FinancialCommandResult,
+  TransferCommand,
+  TransferCommandResult,
   WalletRepository,
   WalletTransactionRecord,
 } from "./wallet.types";
@@ -18,6 +21,8 @@ interface TransactionMetadata {
   requestHash?: string;
   resultingBalance?: string;
   reason?: string;
+  transferId?: string;
+  counterpartyBookmakerAccountId?: string;
 }
 
 @Injectable()
@@ -112,7 +117,11 @@ export class PrismaWalletRepository implements WalletRepository {
             throw new WalletAccountArchivedError();
           }
 
-          const resultingBalance = account.cachedBalance.add(command.amount);
+          const transactionAmount = command.targetBalance
+            ? command.targetBalance.sub(account.cachedBalance)
+            : command.amount;
+          const resultingBalance =
+            command.targetBalance ?? account.cachedBalance.add(command.amount);
           if (resultingBalance.isNegative())
             throw new WalletInsufficientBalanceError();
           const metadata: Prisma.InputJsonObject = {
@@ -125,7 +134,7 @@ export class PrismaWalletRepository implements WalletRepository {
               userId: command.userId,
               bookmakerAccountId: command.bookmakerAccountId,
               type: command.type,
-              amount: command.amount,
+              amount: transactionAmount,
               idempotencyKey: command.idempotencyKey,
               metadata,
             },
@@ -153,6 +162,118 @@ export class PrismaWalletRepository implements WalletRepository {
           return {
             transaction: this.transactionRecord(transaction),
             resultingBalance,
+            replayed: false,
+            requestHash: command.requestHash,
+          };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    );
+  }
+
+  async transfer(command: TransferCommand): Promise<TransferCommandResult> {
+    return this.withSerializableRetry(() =>
+      this.prisma.$transaction(
+        async (tx) => {
+          const accountIds = [
+            command.sourceBookmakerAccountId,
+            command.destinationBookmakerAccountId,
+          ].sort();
+          const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+            SELECT "id" FROM "bookmaker_accounts"
+            WHERE "id" IN (${Prisma.join(accountIds.map((id) => Prisma.sql`${id}::uuid`))})
+              AND "user_id" = ${command.userId}::uuid
+            ORDER BY "id"
+            FOR UPDATE
+          `);
+          if (locked.length !== 2) throw new WalletAccountNotFoundError();
+
+          const existing = await tx.walletTransaction.findUnique({
+            where: {
+              userId_idempotencyKey: {
+                userId: command.userId,
+                idempotencyKey: command.idempotencyKey,
+              },
+            },
+          });
+          if (existing) return this.replayedTransfer(tx, command, existing);
+
+          const accounts = await tx.bookmakerAccount.findMany({
+            where: { id: { in: accountIds }, userId: command.userId },
+          });
+          const source = accounts.find(
+            (account) => account.id === command.sourceBookmakerAccountId,
+          );
+          const destination = accounts.find(
+            (account) => account.id === command.destinationBookmakerAccountId,
+          );
+          if (!source || !destination) throw new WalletAccountNotFoundError();
+          if (
+            source.status !== BookmakerAccountStatus.ACTIVE ||
+            destination.status !== BookmakerAccountStatus.ACTIVE
+          )
+            throw new WalletAccountArchivedError();
+          const sourceBalance = source.cachedBalance.sub(command.amount);
+          if (sourceBalance.isNegative())
+            throw new WalletInsufficientBalanceError();
+          const destinationBalance = destination.cachedBalance.add(
+            command.amount,
+          );
+          const transferId = randomUUID();
+          const destinationKey = `transfer-in:${command.requestHash}`;
+          const occurredAt = new Date();
+          const debit = await tx.walletTransaction.create({
+            data: {
+              userId: command.userId,
+              bookmakerAccountId: source.id,
+              type: WalletTransactionType.TRANSFER_OUT,
+              amount: command.amount.negated(),
+              idempotencyKey: command.idempotencyKey,
+              occurredAt,
+              metadata: {
+                requestHash: command.requestHash,
+                resultingBalance: sourceBalance.toFixed(2),
+                transferId,
+                counterpartyBookmakerAccountId: destination.id,
+                ...(command.description ? { reason: command.description } : {}),
+              },
+            },
+          });
+          const credit = await tx.walletTransaction.create({
+            data: {
+              userId: command.userId,
+              bookmakerAccountId: destination.id,
+              type: WalletTransactionType.TRANSFER_IN,
+              amount: command.amount,
+              idempotencyKey: destinationKey,
+              occurredAt,
+              metadata: {
+                requestHash: command.requestHash,
+                resultingBalance: destinationBalance.toFixed(2),
+                transferId,
+                counterpartyBookmakerAccountId: source.id,
+                ...(command.description ? { reason: command.description } : {}),
+              },
+            },
+          });
+          await Promise.all([
+            tx.bookmakerAccount.update({
+              where: { id: source.id },
+              data: { cachedBalance: sourceBalance, version: { increment: 1 } },
+            }),
+            tx.bookmakerAccount.update({
+              where: { id: destination.id },
+              data: {
+                cachedBalance: destinationBalance,
+                version: { increment: 1 },
+              },
+            }),
+          ]);
+          return {
+            debitTransaction: this.transactionRecord(debit),
+            creditTransaction: this.transactionRecord(credit),
+            sourceBalance,
+            destinationBalance,
             replayed: false,
             requestHash: command.requestHash,
           };
@@ -259,7 +380,46 @@ export class PrismaWalletRepository implements WalletRepository {
         ? value.resultingBalance
         : undefined;
     const reason = typeof value.reason === "string" ? value.reason : undefined;
-    return { requestHash, resultingBalance, reason };
+    const transferId =
+      typeof value.transferId === "string" ? value.transferId : undefined;
+    const counterpartyBookmakerAccountId =
+      typeof value.counterpartyBookmakerAccountId === "string"
+        ? value.counterpartyBookmakerAccountId
+        : undefined;
+    return {
+      requestHash,
+      resultingBalance,
+      reason,
+      transferId,
+      counterpartyBookmakerAccountId,
+    };
+  }
+
+  private async replayedTransfer(
+    tx: Prisma.TransactionClient,
+    command: TransferCommand,
+    debit: Prisma.WalletTransactionGetPayload<Record<string, never>>,
+  ): Promise<TransferCommandResult> {
+    const debitMetadata = this.metadata(debit.metadata);
+    const credit = await tx.walletTransaction.findUniqueOrThrow({
+      where: {
+        userId_idempotencyKey: {
+          userId: command.userId,
+          idempotencyKey: `transfer-in:${debitMetadata.requestHash ?? command.requestHash}`,
+        },
+      },
+    });
+    const creditMetadata = this.metadata(credit.metadata);
+    return {
+      debitTransaction: this.transactionRecord(debit),
+      creditTransaction: this.transactionRecord(credit),
+      sourceBalance: new Prisma.Decimal(debitMetadata.resultingBalance ?? "0"),
+      destinationBalance: new Prisma.Decimal(
+        creditMetadata.resultingBalance ?? "0",
+      ),
+      replayed: true,
+      requestHash: debitMetadata.requestHash ?? "",
+    };
   }
 
   private accountRecord(

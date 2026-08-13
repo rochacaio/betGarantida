@@ -23,11 +23,26 @@ Na liquidação:
 
 O valor concedido pode diferir do esperado e o valor real prevalece.
 
+Enquanto a operação estiver em `WAITING_CREDIT_USE`, o valor concedido pode
+ser corrigido por `PATCH /operations/:id/generated-credit`. A correção exige a
+versão atual, valor positivo e crédito ainda `AVAILABLE`, sem reserva por uma
+consumidora. Ela atualiza os valores esperado/concedido, incrementa a versão e
+gera auditoria; após reserva ou consumo, retorna conflito sem alterar dados.
+
 ## Operação consumidora
 
 Uma perna com `usesBetCredit=true` referencia `betCreditId`, não apenas a operação de origem. Só créditos `AVAILABLE` do usuário aparecem no seletor.
 
+Como alternativa, `usesFreeBetCredit=true` representa um crédito promocional
+recebido diretamente da casa. Nesse caso `usesBetCredit` também é verdadeiro,
+`betCreditId` deve ser nulo, o valor é informado manualmente e nenhuma outra
+operação é reservada, consumida ou encerrada.
+
 Ao criar a consumidora, o crédito fica reservado para ela dentro da mesma transação. Para simplificar a primeira versão, um crédito é consumido integralmente por uma única operação; uso parcial fica fora do escopo.
+
+Salvar novamente a própria operação consumidora mantém a reserva existente;
+uma reserva da mesma operação é idempotente e não torna o crédito
+indisponível para ela. Outra operação continua impedida de usar o crédito.
 
 Ao liquidar a consumidora:
 
@@ -48,8 +63,8 @@ O campo é retornado como visão nas duas operações relacionadas. Não gera tr
 ## Casos de borda
 
 - Cancelar uma consumidora aberta libera o crédito novamente.
-- Uma geradora aguardando crédito não pode ser cancelada nem editada financeiramente.
+- Uma geradora aguardando crédito não pode ser cancelada nem ter apostas já
+  liquidadas alteradas; apenas o valor do crédito ainda livre pode ser corrigido.
 - Falha ao concluir qualquer participante reverte liquidação e lançamentos inteiros.
 - Repetir a liquidação com a mesma chave retorna o resultado anterior.
 - Chave diferente em operação já liquidada retorna conflito.
-

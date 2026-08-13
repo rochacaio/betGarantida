@@ -9,6 +9,7 @@ export interface OperationLegCommand {
   cashbackPercent: Prisma.Decimal;
   increasePercent: Prisma.Decimal;
   usesBetCredit: boolean;
+  usesFreeBetCredit: boolean;
   profitFactor: Prisma.Decimal;
   effectiveOdd: Prisma.Decimal;
   projectedPayout: Prisma.Decimal;
@@ -82,6 +83,14 @@ export interface OperationsRepository {
     idempotencyKey: string;
     requestHash: string;
   }): Promise<OperationRecord>;
+  correctGeneratedCredit(input: {
+    userId: string;
+    operationId: string;
+    version: number;
+    grantedCreditAmount: Prisma.Decimal;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<OperationRecord>;
 }
 
 export const OPERATIONS_REPOSITORY = Symbol("OPERATIONS_REPOSITORY");
@@ -96,5 +105,7 @@ export class OperationInsufficientBalanceError extends Error {
   }
 }
 export class OperationCreditUnavailableError extends Error {}
+export class OperationCreditReservedError extends Error {}
+export class OperationCreditCorrectionUnavailableError extends Error {}
 export class OperationInvalidSettlementError extends Error {}
 export class OperationIdempotencyConflictError extends Error {}

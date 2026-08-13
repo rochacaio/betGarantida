@@ -29,6 +29,7 @@ export interface FinancialCommand {
   bookmakerAccountId: string;
   type: WalletTransactionType;
   amount: Decimal;
+  targetBalance?: Decimal;
   idempotencyKey: string;
   requestHash: string;
   reason?: string;
@@ -38,6 +39,25 @@ export interface FinancialCommand {
 export interface FinancialCommandResult {
   transaction: WalletTransactionRecord;
   resultingBalance: Decimal;
+  replayed: boolean;
+  requestHash: string;
+}
+
+export interface TransferCommand {
+  userId: string;
+  sourceBookmakerAccountId: string;
+  destinationBookmakerAccountId: string;
+  amount: Decimal;
+  description?: string;
+  idempotencyKey: string;
+  requestHash: string;
+}
+
+export interface TransferCommandResult {
+  debitTransaction: WalletTransactionRecord;
+  creditTransaction: WalletTransactionRecord;
+  sourceBalance: Decimal;
+  destinationBalance: Decimal;
   replayed: boolean;
   requestHash: string;
 }
@@ -61,6 +81,7 @@ export interface WalletRepository {
   applyFinancialCommand(
     command: FinancialCommand,
   ): Promise<FinancialCommandResult>;
+  transfer(command: TransferCommand): Promise<TransferCommandResult>;
   listTransactions(input: {
     userId: string;
     bookmakerAccountId: string;

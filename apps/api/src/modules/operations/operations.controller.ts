@@ -21,6 +21,7 @@ import {
 } from "./dto/operation-write.dto";
 import { OperationsService } from "./operations.service";
 import { SettleOperationDto } from "./dto/settle-operation.dto";
+import { CorrectGeneratedCreditDto } from "./dto/correct-generated-credit.dto";
 
 @ApiTags("operations")
 @ApiCookieAuth("betgarantida_session")
@@ -92,5 +93,20 @@ export class OperationsController {
     @Headers("idempotency-key") idempotencyKey = "",
   ) {
     return this.operations.settle(user.id, id, dto, idempotencyKey);
+  }
+
+  @Patch(":id/generated-credit")
+  correctGeneratedCredit(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: CorrectGeneratedCreditDto,
+    @Headers("idempotency-key") idempotencyKey = "",
+  ) {
+    return this.operations.correctGeneratedCredit(
+      user.id,
+      id,
+      dto,
+      idempotencyKey,
+    );
   }
 }

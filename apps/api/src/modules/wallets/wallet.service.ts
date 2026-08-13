@@ -89,18 +89,80 @@ export class WalletService {
     reason: string;
     idempotencyKey: string;
   }) {
-    const amount = this.money(input.amount);
-    if (amount.isZero())
-      throw new UnprocessableEntityException("O ajuste não pode ser zero.");
+    const targetBalance = this.money(input.amount);
+    if (targetBalance.isNegative())
+      throw new UnprocessableEntityException(
+        "O saldo ajustado não pode ser negativo.",
+      );
     return this.execute({
       userId: input.userId,
       bookmakerAccountId: input.bookmakerAccountId,
-      amount,
+      amount: targetBalance,
+      targetBalance,
       reason: input.reason,
       type: WalletTransactionType.ADJUSTMENT,
       idempotencyKey: input.idempotencyKey,
       auditAdjustment: true,
     });
+  }
+
+  async transfer(input: {
+    userId: string;
+    sourceBookmakerAccountId: string;
+    destinationBookmakerAccountId: string;
+    amount: string;
+    description?: string;
+    idempotencyKey: string;
+  }) {
+    this.assertIdempotencyKey(input.idempotencyKey);
+    if (
+      input.sourceBookmakerAccountId === input.destinationBookmakerAccountId
+    ) {
+      throw new UnprocessableEntityException(
+        "As casas de origem e destino devem ser diferentes.",
+      );
+    }
+    const amount = this.money(input.amount);
+    if (!amount.isPositive())
+      throw new UnprocessableEntityException("Valor inválido.");
+    const requestHash = this.requestHash([
+      "TRANSFER",
+      input.sourceBookmakerAccountId,
+      input.destinationBookmakerAccountId,
+      amount.toFixed(2),
+      input.description ?? "",
+    ]);
+    try {
+      const result = await this.repository.transfer({
+        ...input,
+        amount,
+        requestHash,
+      });
+      this.assertReplayMatches(result.requestHash, requestHash);
+      return {
+        transfer: {
+          debitTransactionId: result.debitTransaction.id,
+          creditTransactionId: result.creditTransaction.id,
+          amount: amount.toFixed(2),
+          sourceBookmakerAccountId: input.sourceBookmakerAccountId,
+          destinationBookmakerAccountId: input.destinationBookmakerAccountId,
+        },
+        sourceBalance: result.sourceBalance.toFixed(2),
+        destinationBalance: result.destinationBalance.toFixed(2),
+        idempotentReplay: result.replayed,
+      };
+    } catch (error) {
+      if (error instanceof WalletAccountNotFoundError)
+        throw new NotFoundException("Casa de aposta não encontrada.");
+      if (error instanceof WalletAccountArchivedError)
+        throw new ConflictException("Uma das casas de aposta está arquivada.");
+      if (error instanceof WalletInsufficientBalanceError)
+        throw new UnprocessableEntityException({
+          code: "INSUFFICIENT_BALANCE",
+          message: "Saldo insuficiente na casa de origem.",
+        });
+      throw error;
+    }
   }
 
   async listTransactions(input: {
@@ -157,6 +219,7 @@ export class WalletService {
     userId: string;
     bookmakerAccountId: string;
     amount: Prisma.Decimal;
+    targetBalance?: Prisma.Decimal;
     reason?: string;
     type: WalletTransactionType;
     idempotencyKey: string;
@@ -167,6 +230,7 @@ export class WalletService {
       input.type,
       input.bookmakerAccountId,
       input.amount.toFixed(2),
+      input.targetBalance?.toFixed(2) ?? "",
       input.reason ?? "",
     ]);
     let result: FinancialCommandResult;

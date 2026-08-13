@@ -1,0 +1,2 @@
+ALTER TYPE "WalletTransactionType" ADD VALUE 'TRANSFER_OUT';
+ALTER TYPE "WalletTransactionType" ADD VALUE 'TRANSFER_IN';

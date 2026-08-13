@@ -32,6 +32,8 @@ GET  /bookmaker-accounts/:id/transactions
 POST /bookmaker-accounts/:id/deposits
 POST /bookmaker-accounts/:id/withdrawals
 POST /bookmaker-accounts/:id/adjustments
+POST /bookmaker-accounts/transfers
+PATCH /operations/:id/generated-credit
 
 POST /operations/preview
 GET  /operations

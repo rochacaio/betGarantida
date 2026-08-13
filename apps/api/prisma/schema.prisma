@@ -23,6 +23,8 @@ enum WalletTransactionType {
   INITIAL_BALANCE
   DEPOSIT
   WITHDRAWAL
+  TRANSFER_OUT
+  TRANSFER_IN
   BET_STAKE
   BET_RETURN
   BET_REFUND
@@ -218,6 +220,7 @@ model BetLeg {
   cashbackPercent    Decimal             @default(0) @map("cashback_percent") @db.Decimal(9, 6)
   increasePercent    Decimal             @default(0) @map("increase_percent") @db.Decimal(9, 6)
   usesBetCredit      Boolean             @default(false) @map("uses_bet_credit")
+  usesFreeBetCredit  Boolean             @default(false) @map("uses_free_bet_credit")
   result             BetLegResult        @default(PENDING)
   profitFactor       Decimal             @map("profit_factor") @db.Decimal(19, 6)
   effectiveOdd       Decimal             @map("effective_odd") @db.Decimal(19, 6)

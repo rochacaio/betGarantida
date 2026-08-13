@@ -15,6 +15,7 @@ import { CurrentUser } from "../auth/current-user.decorator";
 import { AdjustmentDto } from "../wallets/dto/adjustment.dto";
 import { AmountDto } from "../wallets/dto/amount.dto";
 import { ListTransactionsDto } from "../wallets/dto/list-transactions.dto";
+import { TransferDto } from "../wallets/dto/transfer.dto";
 import { WalletService } from "../wallets/wallet.service";
 import { BookmakerAccountsService } from "./bookmaker-accounts.service";
 import { CreateBookmakerAccountDto } from "./dto/create-bookmaker-account.dto";
@@ -122,6 +123,19 @@ export class BookmakerAccountsController {
       bookmakerAccountId: id,
       amount: dto.amount,
       reason: dto.reason,
+      idempotencyKey,
+    });
+  }
+
+  @Post("transfers")
+  transfer(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: TransferDto,
+    @Headers("idempotency-key") idempotencyKey = "",
+  ) {
+    return this.wallets.transfer({
+      userId: user.id,
+      ...dto,
       idempotencyKey,
     });
   }

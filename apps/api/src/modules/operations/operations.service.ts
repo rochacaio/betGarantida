@@ -22,10 +22,13 @@ import {
 import { OperationLegDto } from "./dto/operation-leg.dto";
 import { ListOperationsDto } from "./dto/list-operations.dto";
 import { SettleOperationDto } from "./dto/settle-operation.dto";
+import { CorrectGeneratedCreditDto } from "./dto/correct-generated-credit.dto";
 import {
   OPERATIONS_REPOSITORY,
   OperationAccountError,
   OperationCreditUnavailableError,
+  OperationCreditReservedError,
+  OperationCreditCorrectionUnavailableError,
   OperationInsufficientBalanceError,
   OperationIdempotencyConflictError,
   OperationInvalidSettlementError,
@@ -234,6 +237,39 @@ export class OperationsService {
     };
   }
 
+  async correctGeneratedCredit(
+    userId: string,
+    id: string,
+    dto: CorrectGeneratedCreditDto,
+    idempotencyKey: string,
+  ) {
+    this.assertIdempotencyKey(idempotencyKey);
+    const grantedCreditAmount = new Prisma.Decimal(dto.grantedCreditAmount);
+    if (!grantedCreditAmount.isPositive())
+      throw new UnprocessableEntityException(
+        "O valor do crédito deve ser maior que zero.",
+      );
+    return {
+      operation: this.response(
+        await this.execute(() =>
+          this.repository.correctGeneratedCredit({
+            userId,
+            operationId: id,
+            version: dto.version,
+            grantedCreditAmount,
+            idempotencyKey,
+            requestHash: this.hash([
+              "CORRECT_GENERATED_CREDIT",
+              id,
+              dto.version,
+              grantedCreditAmount.toFixed(2),
+            ]),
+          }),
+        ),
+      ),
+    };
+  }
+
   private command(
     userId: string,
     dto: CreateOperationDto,
@@ -268,6 +304,7 @@ export class OperationsService {
       legs: snapshot.legs.map((leg, index) => ({
         bookmakerAccountId: dto.legs[index].bookmakerAccountId,
         betCreditId: dto.legs[index].betCreditId,
+        usesFreeBetCredit: dto.legs[index].usesFreeBetCredit ?? false,
         stake: new Prisma.Decimal(leg.stake.toString()),
         odd: new Prisma.Decimal(leg.odd.toString()),
         commissionPercent: new Prisma.Decimal(leg.commissionPercent.toString()),
@@ -315,7 +352,7 @@ export class OperationsService {
         code: "REQUIRED_WHEN_GENERATES_CREDIT",
       });
     dto.legs.forEach((leg, index) => {
-      if (leg.usesBetCredit && !leg.betCreditId)
+      if (leg.usesBetCredit && !leg.usesFreeBetCredit && !leg.betCreditId)
         fields.push({
           path: `legs.${index}.betCreditId`,
           code: "REQUIRED_WHEN_USES_CREDIT",
@@ -324,6 +361,16 @@ export class OperationsService {
         fields.push({
           path: `legs.${index}.betCreditId`,
           code: "FORBIDDEN_WITHOUT_CREDIT",
+        });
+      if (!leg.usesBetCredit && leg.usesFreeBetCredit)
+        fields.push({
+          path: `legs.${index}.usesFreeBetCredit`,
+          code: "FORBIDDEN_WITHOUT_CREDIT",
+        });
+      if (leg.usesFreeBetCredit && leg.betCreditId)
+        fields.push({
+          path: `legs.${index}.betCreditId`,
+          code: "FORBIDDEN_WITH_FREE_CREDIT",
         });
     });
     const ids = dto.legs.flatMap((leg) =>
@@ -383,6 +430,18 @@ export class OperationsService {
         throw new ConflictException({
           code: "BET_CREDIT_UNAVAILABLE",
           message: "O crédito selecionado não está disponível.",
+        });
+      if (error instanceof OperationCreditReservedError)
+        throw new ConflictException({
+          code: "BET_CREDIT_ALREADY_RESERVED",
+          message:
+            "Este crédito já está reservado por outra surebet aberta. Edite ou cancele a operação que possui a reserva.",
+        });
+      if (error instanceof OperationCreditCorrectionUnavailableError)
+        throw new ConflictException({
+          code: "BET_CREDIT_CORRECTION_UNAVAILABLE",
+          message:
+            "O crédito só pode ser corrigido enquanto aguarda uso e ainda não foi reservado por outra surebet.",
         });
       if (error instanceof OperationInvalidSettlementError)
         throw new ConflictException({

@@ -69,6 +69,7 @@ Status: implementada e validada sem banco externo.
 - Movimentações bloqueiam a conta com `SELECT ... FOR UPDATE` e usam transação `SERIALIZABLE` com retry para impedir gastos concorrentes acima do saldo.
 - Replays retornam o efeito original; chave reutilizada com payload diferente gera `IDEMPOTENCY_CONFLICT`.
 - Ajustes exigem motivo e geram `AuditLog` na mesma transação.
+- Ajuste de banca define o novo saldo final e lança no ledger apenas a diferença; depósito permanece aditivo e saque permanece subtrativo.
 - Extrato usa cursor, saldo por casa retorna disponível, stake aberta e patrimônio.
 - Rotina interna de reconciliação compara soma do ledger com cache sem corrigir divergência silenciosamente.
 - Casas arquivadas preservam histórico e recusam novas movimentações financeiras.
@@ -170,3 +171,57 @@ Status: implementada e validada.
 Pendências deliberadas:
 
 - Geração automática dos tipos web a partir do OpenAPI e validação do documento em CI serão conectadas junto da integração do frontend/CI nas Specs 11 e 12. Os contratos manuais atuais já refletem os endpoints implementados.
+
+## Spec 10 — Segurança e observabilidade
+
+Status: implementada e validada sem serviços externos.
+
+- Whitelist/validação de DTOs, Helmet, limite de payload, CORS restrito, cookies seguros, Argon2id, hashes de tokens e criptografia de CPF permanecem ativos.
+- Middleware de mesma origem bloqueia mutações autenticadas cujo `Origin` difere de `APP_ORIGIN`, protegendo o cookie contra CSRF.
+- `requestId` é validado/gerado no início da requisição, propagado por `AsyncLocalStorage`, header, erros, logs e auditoria.
+- Logs estruturados JSON contêm apenas método, rota, status, duração, requestId e referência pseudonimizada do usuário; não registram body, query sensível, cookie, CPF, senha ou token.
+- Auditoria cobre cadastro, login, troca de senha, operações financeiras e eventos de expectativa, reserva, concessão, negativa e consumo de crédito.
+- `/health` verifica o processo; `/health/readiness` consulta o banco; `/health/metrics` expõe contadores locais de requisições, erros, taxa de erro e latência média.
+- Reconciliação continua sem correção silenciosa; migrations permanecem comando separado do startup.
+
+Pendências deliberadas:
+
+- Métricas locais reiniciam com a função serverless. Exportação para observabilidade externa e alertas persistentes pertencem à configuração de produção.
+- Backups e usuário PostgreSQL de menor privilégio dependem do provedor escolhido na Spec 13.
+
+## Spec 11 — Estratégia de testes
+
+Status: implementada; suíte PostgreSQL preparada e não executada localmente nesta sessão.
+
+- CI do GitHub sobe PostgreSQL 17 descartável, aplica migrations e executa lint, tipos, unitários, integração e build completo.
+- Suíte `financial.integration-spec.ts` usa Prisma/repositório reais e cobre débito atômico, replay idempotente e estorno com reconciliação de saldo.
+- A suíte exige `RUN_DB_INTEGRATION=1` e recusa banco cujo nome não termine em `_test`, reduzindo risco contra dados reais.
+- `docker-compose.test.yml` e README da raiz documentam banco e comandos locais.
+- 68 testes da API cobrem operações, créditos, dashboard, validação, autenticação, carteira e proteção CSRF/requestId; os 18 testes do motor permanecem aprovados.
+- Builds de produção do Nest e Next e os E2E sem banco passaram.
+
+Pendências deliberadas:
+
+- Nesta sessão não havia PostgreSQL/Docker ativo; portanto, a nova suíte real foi validada por typecheck/lint e será executada no CI ou após subir o serviço documentado.
+- Ampliar a suíte real para concorrência de crédito, liquidação e isolamento completo entre usuários continua recomendado antes do primeiro uso financeiro em produção.
+
+## Spec 12 — Integração com o frontend
+
+Status: implementada e validada por lint, typecheck e build de produção.
+
+- Camada única `lib/api/client` trata cookies, envelopes de erro e comandos idempotentes; módulos `features/auth`, `bookmakers`, `operations` e `dashboard` concentram chamadas HTTP.
+- Login, cadastro, restauração de sessão, logout, recuperação e redefinição por token usam a API real.
+- Casas, saldos, operações, edição, liquidação, créditos disponíveis e dashboard usam respostas canônicas do backend.
+- O editor usa preview autoritativo com debounce e mantém cálculo local apenas para resposta visual imediata.
+- Após mutações financeiras, contas, operações e dashboard são recarregados; o frontend não altera saldos localmente.
+- Surebets em `WAITING_CREDIT_USE` permitem corrigir o valor concedido enquanto o crédito estiver disponível e sem reserva; a correção é auditada e versionada.
+- Mutações de autenticação, casas, saldos, transferências e surebets exibem toast de sucesso ou erro com a mensagem devolvida pela API.
+- Dados demonstrativos, `initialBookmakers`, `initialSurebets`, flags financeiras locais e `betgarantida-demo` foram removidos.
+- Estados iniciais de carregamento, listas vazias e erros de autenticação/mutação estão cobertos; `STALE_VERSION` preserva o drawer/rascunho porque a mutação rejeitada não desmonta o editor.
+- Rewrite por `API_ORIGIN` mantém cookies em mesma origem e está alinhado ao deploy na Vercel.
+
+Pendências deliberadas:
+
+- O web usa tipos públicos mantidos na camada de feature. Geração automática a partir do OpenAPI continua recomendada no endurecimento do CI, sem bloquear o contrato atual.
+- Extrato detalhado, depósito, saque e ajuste já têm API, mas a tela visual atual ainda só apresenta o resumo da casa; completar essas interações quando a interface correspondente for desenhada.
+- O ciclo E2E visual completo depende do PostgreSQL de desenvolvimento ativo e deve ser executado antes do deploy.

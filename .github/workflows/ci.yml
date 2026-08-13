@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: betgarantida
+          POSTGRES_PASSWORD: betgarantida
+          POSTGRES_DB: betgarantida_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U betgarantida -d betgarantida_test"
+          --health-interval 2s --health-timeout 2s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://betgarantida:betgarantida@localhost:5432/betgarantida_test
+      DIRECT_DATABASE_URL: postgresql://betgarantida:betgarantida@localhost:5432/betgarantida_test
+      RUN_DB_INTEGRATION: "1"
+      NODE_ENV: test
+      APP_ORIGIN: http://localhost:3000
+      SESSION_SECRET: integration-session-secret-with-32-bytes
+      CPF_HASH_SECRET: integration-cpf-secret-with-32-bytes
+      CPF_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run prisma:migrate:deploy --workspace betgarantida-api
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:integration
+      - run: npm run build

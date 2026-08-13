@@ -76,6 +76,7 @@ function record() {
       cashbackPercent: new Prisma.Decimal(0),
       increasePercent: new Prisma.Decimal(0),
       usesBetCredit: false,
+      usesFreeBetCredit: false,
       result: "PENDING" as const,
       profitFactor: new Prisma.Decimal(position ? 1 : "1.43"),
       effectiveOdd: new Prisma.Decimal(leg.odd),
@@ -101,6 +102,7 @@ describe("OperationsService", () => {
       list: jest.fn(),
       cancel: jest.fn(),
       settle: jest.fn(),
+      correctGeneratedCredit: jest.fn(),
     };
     service = new OperationsService(repository);
   });
@@ -169,6 +171,21 @@ describe("OperationsService", () => {
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
+  it("aceita crédito livre sem vínculo com uma surebet geradora", async () => {
+    repository.create.mockResolvedValue(record());
+    const input = dto();
+    input.legs[0].usesBetCredit = true;
+    input.legs[0].usesFreeBetCredit = true;
+    input.legs[0].stake = "25.00";
+    await service.create(userId, input, idempotencyKey);
+    const command = repository.create.mock.calls[0]?.[0];
+    expect(command?.legs[0]).toMatchObject({
+      usesBetCredit: true,
+      usesFreeBetCredit: true,
+      betCreditId: undefined,
+    });
+  });
+
   it("rejeita o mesmo crédito em duas linhas", async () => {
     const input = dto();
     input.legs.forEach((leg) => {
@@ -178,6 +195,23 @@ describe("OperationsService", () => {
     await expect(
       service.create(userId, input, idempotencyKey),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
+  it("permite corrigir o crédito concedido enquanto aguarda uso", async () => {
+    repository.correctGeneratedCredit.mockResolvedValue(record());
+    await service.correctGeneratedCredit(
+      userId,
+      operationId,
+      { version: 2, grantedCreditAmount: "25.00" },
+      idempotencyKey,
+    );
+    const command = repository.correctGeneratedCredit.mock.calls[0]?.[0];
+    expect(command).toBeDefined();
+    if (!command) throw new Error("Comando de correção não capturado.");
+    expect(command.userId).toBe(userId);
+    expect(command.operationId).toBe(operationId);
+    expect(command.version).toBe(2);
+    expect(command.grantedCreditAmount.toFixed(2)).toBe("25.00");
   });
 
   it.each([
