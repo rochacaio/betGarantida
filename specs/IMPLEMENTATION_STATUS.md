@@ -97,7 +97,6 @@ Status: implementada e validada.
 
 Pendências deliberadas:
 
-- A Spec 06 deve chamar este motor no servidor para preview e escrita, ignorar campos calculados pelo cliente e persistir o snapshot/versionamento retornado.
 - Cashback suportado nesta versão é retorno em dinheiro. Cashback concedido como crédito deve ser modelado pelo fluxo de créditos da Spec 07, sem tratá-lo como caixa.
 - A interface ainda mantém cálculos locais do protótipo. Na integração, eles podem servir como resposta visual imediata, mas o resultado canônico será sempre o recalculado pela API.
 
@@ -115,11 +114,59 @@ Status: implementada e validada sem banco externo.
 - Cancelamento aceita apenas `OPEN`, exige `version`, estorna caixa, libera créditos reservados, cancela crédito esperado e cria auditoria na mesma transação.
 - Lista usa cursor, ordem decrescente e filtros por status, período, casa e evento; todas as consultas incluem o usuário autenticado.
 - Erros de validação globais agora expõem caminhos completos, inclusive `legs.1.odd`, para campos e toastrs do frontend.
-- Prisma validate/generate, lint, typecheck, build, 61 testes da API, 18 testes do motor e 2 E2E passaram.
+- Prisma validate/generate, lint, typecheck, build, 66 testes da API, 18 testes do motor e 2 E2E passaram após as Specs 7–9.
 
 Pendências deliberadas:
 
 - As transações, locks, constraints e novas migrations ainda precisam ser aplicados e exercitados em PostgreSQL real quando o banco de teste/Neon for configurado.
 - Liquidação, crédito concedido/não concedido, consumo definitivo e resultado promocional combinado pertencem à Spec 07.
-- `Idempotency-Key` para as mutações financeiras de operações será uniformizado na implementação do contrato transversal da Spec 09; a Spec 07 já exige idempotência específica para liquidação.
 - O frontend continua mockado e será conectado aos contratos canônicos na Spec 12.
+
+## Spec 07 — Liquidação e crédito de aposta
+
+Status: implementada e validada sem banco externo.
+
+- `POST /operations/:id/settle` exige operação `OPEN`, `version`, resultados completos, ao menos um green e `Idempotency-Key`.
+- Payouts vencedores e cashback em dinheiro das linhas perdedoras são recalculados pelo servidor e creditados na casa correspondente uma única vez.
+- Operações geradoras exigem a decisão sobre o crédito: `NOT_GRANTED` encerra normalmente; `AVAILABLE` aceita valor real diferente do esperado e move a operação para `WAITING_CREDIT_USE`.
+- Operações consumidoras validam novamente a reserva, marcam o crédito `CONSUMED` e encerram geradora e consumidora atomicamente.
+- Resultado promocional combinado é retornado como visão, somando os lucros individuais sem gerar ledger adicional.
+- `GET /bet-credits?status=AVAILABLE` retorna somente créditos do usuário ainda não reservados para alimentar o seletor do frontend.
+
+Pendências deliberadas:
+
+- Concorrência e rollback integral precisam ser exercitados contra PostgreSQL real; a implementação usa locks e transação `SERIALIZABLE` com retry.
+- Expiração automática de créditos pertence à rotina operacional/observabilidade posterior.
+
+## Spec 08 — Dashboard
+
+Status: implementada e validada sem banco externo.
+
+- `GET /dashboard/monthly?month=YYYY-MM` agrega diretamente no PostgreSQL e sempre filtra pelo usuário autenticado.
+- Métricas incluem ganhos, perdas, resultado líquido, investimento encerrado, ROI, quantidade encerrada, stake aberta, saldo disponível e patrimônio.
+- O mês usa `settledAt` na timezone `America/Sao_Paulo`; `WAITING_CREDIT_USE` não entra no resultado.
+- Série diária retorna todos os dias do mês, inclusive dias zerados, com resultado e acumulado.
+- Resumo por casa inclui disponível, aberto, patrimônio e resultado mensal derivado do ledger.
+- Operações recentes e valores decimais serializados como strings fazem parte da resposta.
+- Comparação com o mês anterior permanece `null` nesta primeira versão, como permitido pela spec quando não há base comparável.
+
+Pendências deliberadas:
+
+- Validar planos e performance das queries com volume real no Neon e adicionar índices específicos apenas se as métricas mostrarem necessidade.
+
+## Spec 09 — Contrato da API
+
+Status: implementada e validada.
+
+- Prefixo, cookie, strings decimais, datas ISO, enums e paginação por cursor permanecem alinhados ao contrato.
+- Todas as mutações financeiras de operações agora exigem `Idempotency-Key`; o registro de comando e seus efeitos são atômicos.
+- Repetição com mesmo hash não duplica efeitos; chave reutilizada com conteúdo diferente retorna `IDEMPOTENCY_CONFLICT`.
+- Corridas na unicidade da chave são repetidas e resolvidas como replay dentro da política transacional.
+- Filtro global padroniza erros em `error { code, message, fields?, requestId }` e devolve `X-Request-Id`.
+- Validação de DTOs mantém caminhos completos para erros de campos aninhados.
+- `@betgarantida/contracts` expõe convenções compartilhadas de operação, paginação, dashboard, enums e erros; Swagger continua disponível em `/docs`.
+- Typecheck dos contratos, lint/typecheck/build da API, 66 testes da API, 18 do motor e 2 E2E passaram.
+
+Pendências deliberadas:
+
+- Geração automática dos tipos web a partir do OpenAPI e validação do documento em CI serão conectadas junto da integração do frontend/CI nas Specs 11 e 12. Os contratos manuais atuais já refletem os endpoints implementados.

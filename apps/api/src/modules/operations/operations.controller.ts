@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -19,6 +20,7 @@ import {
   UpdateOperationDto,
 } from "./dto/operation-write.dto";
 import { OperationsService } from "./operations.service";
+import { SettleOperationDto } from "./dto/settle-operation.dto";
 
 @ApiTags("operations")
 @ApiCookieAuth("betgarantida_session")
@@ -35,8 +37,9 @@ export class OperationsController {
   create(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateOperationDto,
+    @Headers("idempotency-key") idempotencyKey = "",
   ) {
-    return this.operations.create(user.id, dto);
+    return this.operations.create(user.id, dto, idempotencyKey);
   }
 
   @Get()
@@ -60,8 +63,9 @@ export class OperationsController {
     @CurrentUser() user: AuthenticatedUser,
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateOperationDto,
+    @Headers("idempotency-key") idempotencyKey = "",
   ) {
-    return this.operations.update(user.id, id, dto);
+    return this.operations.update(user.id, id, dto, idempotencyKey);
   }
 
   @Post(":id/cancel")
@@ -69,7 +73,24 @@ export class OperationsController {
     @CurrentUser() user: AuthenticatedUser,
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() dto: CancelOperationDto,
+    @Headers("idempotency-key") idempotencyKey = "",
   ) {
-    return this.operations.cancel(user.id, id, dto.version, dto.reason);
+    return this.operations.cancel(
+      user.id,
+      id,
+      dto.version,
+      dto.reason,
+      idempotencyKey,
+    );
+  }
+
+  @Post(":id/settle")
+  settle(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: SettleOperationDto,
+    @Headers("idempotency-key") idempotencyKey = "",
+  ) {
+    return this.operations.settle(user.id, id, dto, idempotencyKey);
   }
 }

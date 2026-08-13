@@ -6,6 +6,7 @@ import {
   UnprocessableEntityException,
 } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import { createHash } from "node:crypto";
 import {
   balanceStakes,
   calculateOperationSnapshot,
@@ -20,11 +21,14 @@ import {
 } from "./dto/operation-write.dto";
 import { OperationLegDto } from "./dto/operation-leg.dto";
 import { ListOperationsDto } from "./dto/list-operations.dto";
+import { SettleOperationDto } from "./dto/settle-operation.dto";
 import {
   OPERATIONS_REPOSITORY,
   OperationAccountError,
   OperationCreditUnavailableError,
   OperationInsufficientBalanceError,
+  OperationIdempotencyConflictError,
+  OperationInvalidSettlementError,
   OperationNotFoundError,
   OperationNotOpenError,
   OperationRecord,
@@ -75,18 +79,36 @@ export class OperationsService {
     }
   }
 
-  async create(userId: string, dto: CreateOperationDto) {
+  async create(
+    userId: string,
+    dto: CreateOperationDto,
+    idempotencyKey: string,
+  ) {
+    this.assertIdempotencyKey(idempotencyKey);
     return {
       operation: this.response(
         await this.execute(() =>
-          this.repository.create(this.command(userId, dto)),
+          this.repository.create(
+            this.command(userId, dto, idempotencyKey, "CREATE"),
+          ),
         ),
       ),
     };
   }
 
-  async update(userId: string, id: string, dto: UpdateOperationDto) {
-    const command = this.command(userId, dto);
+  async update(
+    userId: string,
+    id: string,
+    dto: UpdateOperationDto,
+    idempotencyKey: string,
+  ) {
+    this.assertIdempotencyKey(idempotencyKey);
+    const command = this.command(
+      userId,
+      dto,
+      idempotencyKey,
+      `UPDATE:${id}:${dto.version}`,
+    );
     return {
       operation: this.response(
         await this.execute(() =>
@@ -126,11 +148,87 @@ export class OperationsService {
     };
   }
 
-  async cancel(userId: string, id: string, version: number, reason?: string) {
+  async cancel(
+    userId: string,
+    id: string,
+    version: number,
+    reason: string | undefined,
+    idempotencyKey: string,
+  ) {
+    this.assertIdempotencyKey(idempotencyKey);
     return {
       operation: this.response(
         await this.execute(() =>
-          this.repository.cancel({ userId, operationId: id, version, reason }),
+          this.repository.cancel({
+            userId,
+            operationId: id,
+            version,
+            reason,
+            idempotencyKey,
+            requestHash: this.hash(["CANCEL", id, version, reason ?? ""]),
+          }),
+        ),
+      ),
+    };
+  }
+
+  async settle(
+    userId: string,
+    id: string,
+    dto: SettleOperationDto,
+    idempotencyKey: string,
+  ) {
+    this.assertIdempotencyKey(idempotencyKey);
+    if (
+      !dto.legs.some((leg) => leg.result === "WON") ||
+      dto.legs.some((leg) => leg.result === "PENDING")
+    )
+      throw new UnprocessableEntityException({
+        code: "INVALID_SETTLEMENT",
+        message: "Informe todas as linhas e ao menos um green.",
+        fields: [{ path: "legs", code: "INVALID_RESULTS" }],
+      });
+    if (
+      dto.creditGenerated === true &&
+      (!dto.grantedCreditAmount ||
+        new Prisma.Decimal(dto.grantedCreditAmount).lte(0))
+    )
+      throw new UnprocessableEntityException({
+        code: "VALIDATION_ERROR",
+        message: "Informe o crédito concedido.",
+        fields: [
+          {
+            path: "grantedCreditAmount",
+            code: "REQUIRED_WHEN_CREDIT_GENERATED",
+          },
+        ],
+      });
+    const payload = [
+      "SETTLE",
+      id,
+      dto.version,
+      dto.creditGenerated ?? null,
+      dto.grantedCreditAmount ?? null,
+      dto.legs,
+    ];
+    return {
+      operation: this.response(
+        await this.execute(() =>
+          this.repository.settle({
+            userId,
+            operationId: id,
+            version: dto.version,
+            creditGenerated: dto.creditGenerated,
+            grantedCreditAmount: dto.grantedCreditAmount
+              ? new Prisma.Decimal(dto.grantedCreditAmount)
+              : undefined,
+            legs: dto.legs.map((leg) => ({
+              legId: leg.legId,
+              result: leg.result as "WON" | "LOST",
+            })),
+            idempotencyKey,
+            requestHash: this.hash(payload),
+          }),
         ),
       ),
     };
@@ -139,11 +237,15 @@ export class OperationsService {
   private command(
     userId: string,
     dto: CreateOperationDto,
+    idempotencyKey: string,
+    action: string,
   ): OperationWriteCommand {
     this.validateConditional(dto);
     const snapshot = this.snapshot(dto);
     return {
       userId,
+      idempotencyKey,
+      requestHash: this.hash([action, dto]),
       eventName: dto.eventName.trim(),
       notes: dto.notes?.trim() || undefined,
       generatesBetCredit: dto.generatesBetCredit ?? false,
@@ -282,6 +384,16 @@ export class OperationsService {
           code: "BET_CREDIT_UNAVAILABLE",
           message: "O crédito selecionado não está disponível.",
         });
+      if (error instanceof OperationInvalidSettlementError)
+        throw new ConflictException({
+          code: "INVALID_STATE_TRANSITION",
+          message: "A operação não pode ser liquidada com estes dados.",
+        });
+      if (error instanceof OperationIdempotencyConflictError)
+        throw new ConflictException({
+          code: "IDEMPOTENCY_CONFLICT",
+          message: "A chave de idempotência já foi usada com outro conteúdo.",
+        });
       throw error;
     }
   }
@@ -319,6 +431,28 @@ export class OperationsService {
           }
         : null,
       snapshot: operation.calculationSnapshot,
+      combinedPromotionProfit: this.combinedPromotionProfit(operation),
     };
+  }
+
+  private combinedPromotionProfit(operation: OperationRecord): string | null {
+    const related =
+      operation.generatedCredit?.consumerOperation?.realizedProfit ??
+      operation.consumedCredits[0]?.sourceOperation.realizedProfit;
+    if (!related || !operation.realizedProfit) return null;
+    return operation.realizedProfit.add(related).toFixed(2);
+  }
+
+  private assertIdempotencyKey(key: string) {
+    if (!key || key.length < 8 || key.length > 160)
+      throw new UnprocessableEntityException({
+        code: "VALIDATION_ERROR",
+        message: "Idempotency-Key inválida ou ausente.",
+        fields: [{ path: "headers.idempotency-key", code: "REQUIRED" }],
+      });
+  }
+
+  private hash(value: unknown): string {
+    return createHash("sha256").update(JSON.stringify(value)).digest("hex");
   }
 }

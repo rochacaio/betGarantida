@@ -9,6 +9,11 @@
 - `version` obrigatório em edição, cancelamento e liquidação.
 - Cookie de sessão; credenciais habilitadas no cliente.
 
+As mutações de operações registram `userId + Idempotency-Key`, hash do payload,
+ação e operação na mesma transação dos efeitos financeiros. Repetição idêntica
+reproduz o recurso sem novo efeito; conteúdo diferente retorna
+`IDEMPOTENCY_CONFLICT`.
+
 ## Endpoints
 
 ```text
@@ -103,7 +108,10 @@ A resposta inclui a operação canônica, pernas, snapshot calculado, crédito e
 
 Códigos mínimos: `VALIDATION_ERROR`, `UNAUTHENTICATED`, `NOT_FOUND`, `CONFLICT`, `STALE_VERSION`, `INSUFFICIENT_BALANCE`, `INVALID_STATE_TRANSITION`, `BET_CREDIT_UNAVAILABLE`, `IDEMPOTENCY_CONFLICT`, `RATE_LIMITED`.
 
+Todas as exceções HTTP passam pelo mesmo filtro, preservam o status adequado e
+retornam o envelope acima. `X-Request-Id` é aceito quando válido ou gerado pelo
+servidor, devolvido no header e no corpo.
+
 ## Compatibilidade
 
 Mudança incompatível exige nova versão. Campos podem ser adicionados de forma compatível. A especificação OpenAPI deve ser validada no CI e gerar os tipos usados pelo web.
-

@@ -29,6 +29,8 @@ export interface OperationWriteCommand {
   engineVersion: string;
   calculationSnapshot: Prisma.InputJsonValue;
   legs: OperationLegCommand[];
+  idempotencyKey: string;
+  requestHash: string;
 }
 
 export interface ListOperationsInput {
@@ -43,7 +45,11 @@ export interface ListOperationsInput {
 }
 
 export type OperationRecord = Prisma.OperationGetPayload<{
-  include: { legs: true; generatedCredit: true; consumedCredits: true };
+  include: {
+    legs: true;
+    generatedCredit: { include: { consumerOperation: true } };
+    consumedCredits: { include: { sourceOperation: true } };
+  };
 }>;
 
 export interface OperationsRepository {
@@ -63,6 +69,18 @@ export interface OperationsRepository {
     operationId: string;
     version: number;
     reason?: string;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<OperationRecord>;
+  settle(input: {
+    userId: string;
+    operationId: string;
+    version: number;
+    creditGenerated?: boolean;
+    grantedCreditAmount?: Prisma.Decimal;
+    legs: Array<{ legId: string; result: "WON" | "LOST" }>;
+    idempotencyKey: string;
+    requestHash: string;
   }): Promise<OperationRecord>;
 }
 
@@ -78,3 +96,5 @@ export class OperationInsufficientBalanceError extends Error {
   }
 }
 export class OperationCreditUnavailableError extends Error {}
+export class OperationInvalidSettlementError extends Error {}
+export class OperationIdempotencyConflictError extends Error {}

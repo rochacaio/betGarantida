@@ -3,7 +3,12 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from "@nestjs/common";
-import { OperationStatus, OperationType, Prisma } from "@prisma/client";
+import {
+  BetLegResult,
+  OperationStatus,
+  OperationType,
+  Prisma,
+} from "@prisma/client";
 import { OperationsService } from "../src/modules/operations/operations.service";
 import { CreateOperationDto } from "../src/modules/operations/dto/operation-write.dto";
 import {
@@ -21,6 +26,7 @@ const account2 = "10000000-0000-4000-8000-000000000002";
 const creditId = "20000000-0000-4000-8000-000000000001";
 const operationId = "30000000-0000-4000-8000-000000000001";
 const userId = "40000000-0000-4000-8000-000000000001";
+const idempotencyKey = "test-command-0001";
 
 function dto(): CreateOperationDto {
   return {
@@ -94,6 +100,7 @@ describe("OperationsService", () => {
       findById: jest.fn(),
       list: jest.fn(),
       cancel: jest.fn(),
+      settle: jest.fn(),
     };
     service = new OperationsService(repository);
   });
@@ -129,7 +136,7 @@ describe("OperationsService", () => {
 
   it("mantém stakes finais informadas na criação e recalcula snapshot no servidor", async () => {
     repository.create.mockResolvedValue(record());
-    await service.create(userId, dto());
+    await service.create(userId, dto(), idempotencyKey);
     const command = repository.create.mock.calls[0]?.[0];
     expect(command).toBeDefined();
     if (!command) throw new Error("Comando de criação não capturado.");
@@ -146,16 +153,20 @@ describe("OperationsService", () => {
 
   it("exige valor positivo quando gera crédito", async () => {
     await expect(
-      service.create(userId, { ...dto(), generatesBetCredit: true }),
+      service.create(
+        userId,
+        { ...dto(), generatesBetCredit: true },
+        idempotencyKey,
+      ),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
   it("exige referência quando uma linha usa crédito", async () => {
     const input = dto();
     input.legs[0].usesBetCredit = true;
-    await expect(service.create(userId, input)).rejects.toBeInstanceOf(
-      UnprocessableEntityException,
-    );
+    await expect(
+      service.create(userId, input, idempotencyKey),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
   it("rejeita o mesmo crédito em duas linhas", async () => {
@@ -164,9 +175,9 @@ describe("OperationsService", () => {
       leg.usesBetCredit = true;
       leg.betCreditId = creditId;
     });
-    await expect(service.create(userId, input)).rejects.toBeInstanceOf(
-      UnprocessableEntityException,
-    );
+    await expect(
+      service.create(userId, input, idempotencyKey),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
   it.each([
@@ -183,9 +194,9 @@ describe("OperationsService", () => {
     "traduz erros do repositório em erros HTTP estáveis",
     async (repositoryError, expected) => {
       repository.create.mockRejectedValue(repositoryError);
-      await expect(service.create(userId, dto())).rejects.toBeInstanceOf(
-        expected,
-      );
+      await expect(
+        service.create(userId, dto(), idempotencyKey),
+      ).rejects.toBeInstanceOf(expected);
     },
   );
 
@@ -229,14 +240,67 @@ describe("OperationsService", () => {
       status: OperationStatus.CANCELLED,
       version: 2,
     });
-    await service.cancel(userId, operationId, 1, "duplicada");
+    await service.cancel(userId, operationId, 1, "duplicada", idempotencyKey);
     expect(repository.cancel.mock.calls).toContainEqual([
-      {
+      expect.objectContaining({
         userId,
         operationId,
         version: 1,
         reason: "duplicada",
-      },
+        idempotencyKey,
+      }),
     ]);
+  });
+
+  it("exige chave idempotente nas mutações financeiras", async () => {
+    await expect(service.create(userId, dto(), "")).rejects.toBeInstanceOf(
+      UnprocessableEntityException,
+    );
+  });
+
+  it("valida e encaminha a liquidação completa", async () => {
+    const settled = {
+      ...record(),
+      status: OperationStatus.SETTLED,
+      version: 2,
+    };
+    repository.settle.mockResolvedValue(settled);
+    await service.settle(
+      userId,
+      operationId,
+      {
+        version: 1,
+        legs: settled.legs.map((leg, index) => ({
+          legId: leg.id,
+          result: index === 0 ? BetLegResult.WON : BetLegResult.LOST,
+        })),
+      },
+      idempotencyKey,
+    );
+    expect(repository.settle.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        userId,
+        operationId,
+        version: 1,
+        idempotencyKey,
+      }),
+    );
+  });
+
+  it("não aceita liquidação sem green", async () => {
+    await expect(
+      service.settle(
+        userId,
+        operationId,
+        {
+          version: 1,
+          legs: record().legs.map((leg) => ({
+            legId: leg.id,
+            result: BetLegResult.LOST,
+          })),
+        },
+        idempotencyKey,
+      ),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 });

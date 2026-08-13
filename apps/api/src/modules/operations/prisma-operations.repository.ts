@@ -1,18 +1,22 @@
 import { Injectable } from "@nestjs/common";
 import {
   BetCreditStatus,
+  BetLegResult,
   BookmakerAccountStatus,
   OperationStatus,
   Prisma,
   WalletTransactionType,
 } from "@prisma/client";
+import { calculateSettlement } from "@betgarantida/calculation-engine";
 import { randomUUID } from "node:crypto";
 import { PrismaService } from "../../database/prisma.service";
 import {
   ListOperationsInput,
   OperationAccountError,
   OperationCreditUnavailableError,
+  OperationIdempotencyConflictError,
   OperationInsufficientBalanceError,
+  OperationInvalidSettlementError,
   OperationNotFoundError,
   OperationNotOpenError,
   OperationsRepository,
@@ -22,8 +26,8 @@ import {
 
 const include = {
   legs: { orderBy: { position: "asc" as const } },
-  generatedCredit: true,
-  consumedCredits: true,
+  generatedCredit: { include: { consumerOperation: true } },
+  consumedCredits: { include: { sourceOperation: true } },
 };
 
 @Injectable()
@@ -34,6 +38,13 @@ export class PrismaOperationsRepository implements OperationsRepository {
     return this.serializable(() =>
       this.prisma.$transaction(
         async (tx) => {
+          const replay = await this.idempotentReplay(
+            tx,
+            command.userId,
+            command.idempotencyKey,
+            command.requestHash,
+          );
+          if (replay) return replay;
           await this.lockAndValidateAccounts(tx, command);
           const last = await tx.operation.findFirst({
             where: { userId: command.userId },
@@ -66,6 +77,14 @@ export class PrismaOperationsRepository implements OperationsRepository {
                 expectedAmount: command.expectedBetCredit!,
               },
             });
+          await this.recordMutation(
+            tx,
+            command.userId,
+            operation.id,
+            command.idempotencyKey,
+            command.requestHash,
+            "CREATE",
+          );
           return tx.operation.findUniqueOrThrow({
             where: { id: operation.id },
             include,
@@ -82,6 +101,13 @@ export class PrismaOperationsRepository implements OperationsRepository {
     return this.serializable(() =>
       this.prisma.$transaction(
         async (tx) => {
+          const replay = await this.idempotentReplay(
+            tx,
+            command.userId,
+            command.idempotencyKey,
+            command.requestHash,
+          );
+          if (replay) return replay;
           await this.lockOperation(tx, command.userId, command.operationId);
           const old = await tx.operation.findFirst({
             where: { id: command.operationId, userId: command.userId },
@@ -160,6 +186,14 @@ export class PrismaOperationsRepository implements OperationsRepository {
             },
           });
           if (changed.count !== 1) throw new OperationStaleVersionError();
+          await this.recordMutation(
+            tx,
+            command.userId,
+            command.operationId,
+            command.idempotencyKey,
+            command.requestHash,
+            "UPDATE",
+          );
           return tx.operation.findUniqueOrThrow({
             where: { id: command.operationId },
             include,
@@ -208,10 +242,19 @@ export class PrismaOperationsRepository implements OperationsRepository {
     operationId: string;
     version: number;
     reason?: string;
+    idempotencyKey: string;
+    requestHash: string;
   }) {
     return this.serializable(() =>
       this.prisma.$transaction(
         async (tx) => {
+          const replay = await this.idempotentReplay(
+            tx,
+            input.userId,
+            input.idempotencyKey,
+            input.requestHash,
+          );
+          if (replay) return replay;
           await this.lockOperation(tx, input.userId, input.operationId);
           const operation = await tx.operation.findFirst({
             where: { id: input.operationId, userId: input.userId },
@@ -275,6 +318,185 @@ export class PrismaOperationsRepository implements OperationsRepository {
               version: { increment: 1 },
             },
           });
+          await this.recordMutation(
+            tx,
+            input.userId,
+            operation.id,
+            input.idempotencyKey,
+            input.requestHash,
+            "CANCEL",
+          );
+          return tx.operation.findUniqueOrThrow({
+            where: { id: operation.id },
+            include,
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    );
+  }
+
+  settle(input: {
+    userId: string;
+    operationId: string;
+    version: number;
+    creditGenerated?: boolean;
+    grantedCreditAmount?: Prisma.Decimal;
+    legs: Array<{ legId: string; result: "WON" | "LOST" }>;
+    idempotencyKey: string;
+    requestHash: string;
+  }) {
+    return this.serializable(() =>
+      this.prisma.$transaction(
+        async (tx) => {
+          const replay = await this.idempotentReplay(
+            tx,
+            input.userId,
+            input.idempotencyKey,
+            input.requestHash,
+          );
+          if (replay) return replay;
+          await this.lockOperation(tx, input.userId, input.operationId);
+          const operation = await tx.operation.findFirst({
+            where: { id: input.operationId, userId: input.userId },
+            include,
+          });
+          if (!operation) throw new OperationNotFoundError();
+          if (operation.status !== OperationStatus.OPEN)
+            throw new OperationNotOpenError();
+          if (operation.version !== input.version)
+            throw new OperationStaleVersionError();
+          const byId = new Map(
+            input.legs.map((leg) => [leg.legId, leg.result]),
+          );
+          if (
+            byId.size !== operation.legs.length ||
+            operation.legs.some((leg) => !byId.has(leg.id)) ||
+            !input.legs.some((leg) => leg.result === "WON") ||
+            (operation.generatesBetCredit &&
+              input.creditGenerated === undefined)
+          )
+            throw new OperationInvalidSettlementError();
+
+          await this.lockAccountIds(
+            tx,
+            input.userId,
+            operation.legs.map((leg) => leg.bookmakerAccountId),
+          );
+          const settlement = calculateSettlement(
+            operation.legs.map((leg) => ({
+              stake: leg.stake.toString(),
+              odd: leg.odd.toString(),
+              commissionPercent: leg.commissionPercent.toString(),
+              cashbackPercent: leg.cashbackPercent.toString(),
+              increasePercent: leg.increasePercent.toString(),
+              usesBetCredit: leg.usesBetCredit,
+            })),
+            operation.legs.map((leg) => byId.get(leg.id)!),
+          );
+          for (const leg of operation.legs) {
+            const result = byId.get(leg.id)!;
+            const payout =
+              result === "WON"
+                ? leg.projectedPayout
+                : leg.stake
+                    .mul(leg.cashbackPercent)
+                    .div(100)
+                    .toDecimalPlaces(2);
+            if (payout.gt(0))
+              await this.walletEffect(
+                tx,
+                input.userId,
+                leg.bookmakerAccountId,
+                operation.id,
+                leg.id,
+                payout,
+                WalletTransactionType.BET_RETURN,
+                `settle:${operation.id}:${leg.id}`,
+              );
+            await tx.betLeg.update({
+              where: { id: leg.id },
+              data: {
+                result: result === "WON" ? BetLegResult.WON : BetLegResult.LOST,
+              },
+            });
+          }
+
+          const now = new Date();
+          let status: OperationStatus = OperationStatus.SETTLED;
+          let settledAt: Date | null = now;
+          if (operation.generatesBetCredit) {
+            if (input.creditGenerated) {
+              if (!input.grantedCreditAmount?.gt(0))
+                throw new OperationInvalidSettlementError();
+              await tx.betCredit.update({
+                where: { sourceOperationId: operation.id },
+                data: {
+                  status: BetCreditStatus.AVAILABLE,
+                  grantedAmount: input.grantedCreditAmount,
+                },
+              });
+              status = OperationStatus.WAITING_CREDIT_USE;
+              settledAt = null;
+            } else {
+              await tx.betCredit.update({
+                where: { sourceOperationId: operation.id },
+                data: { status: BetCreditStatus.NOT_GRANTED },
+              });
+            }
+          }
+
+          const consumedIds = operation.legs.flatMap((leg) =>
+            leg.betCreditId ? [leg.betCreditId] : [],
+          );
+          if (consumedIds.length) {
+            const credits = await tx.betCredit.findMany({
+              where: {
+                id: { in: consumedIds },
+                userId: input.userId,
+                status: BetCreditStatus.AVAILABLE,
+                consumerOperationId: operation.id,
+              },
+            });
+            if (credits.length !== consumedIds.length)
+              throw new OperationCreditUnavailableError();
+            await tx.betCredit.updateMany({
+              where: { id: { in: consumedIds } },
+              data: { status: BetCreditStatus.CONSUMED, consumedAt: now },
+            });
+            await tx.operation.updateMany({
+              where: {
+                id: {
+                  in: credits.map((credit) => credit.sourceOperationId),
+                },
+                status: OperationStatus.WAITING_CREDIT_USE,
+              },
+              data: {
+                status: OperationStatus.SETTLED,
+                settledAt: now,
+                version: { increment: 1 },
+              },
+            });
+          }
+          await tx.operation.update({
+            where: { id: operation.id },
+            data: {
+              status,
+              settledAt,
+              realizedReturn: settlement.realizedReturn.toString(),
+              realizedProfit: settlement.realizedProfit.toString(),
+              realizedRoiPercent: settlement.realizedRoiPercent.toString(),
+              version: { increment: 1 },
+            },
+          });
+          await this.recordMutation(
+            tx,
+            input.userId,
+            operation.id,
+            input.idempotencyKey,
+            input.requestHash,
+            "SETTLE",
+          );
           return tx.operation.findUniqueOrThrow({
             where: { id: operation.id },
             include,
@@ -453,12 +675,51 @@ export class PrismaOperationsRepository implements OperationsRepository {
         if (
           attempt < 3 &&
           error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === "P2034"
+          (error.code === "P2034" || error.code === "P2002")
         )
           continue;
         throw error;
       }
     }
     throw new Error("Unreachable transaction retry state");
+  }
+
+  private async idempotentReplay(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    key: string,
+    hash: string,
+  ) {
+    const mutation = await tx.operationMutation.findUnique({
+      where: {
+        userId_idempotencyKey: { userId, idempotencyKey: key },
+      },
+    });
+    if (!mutation) return null;
+    if (mutation.requestHash !== hash)
+      throw new OperationIdempotencyConflictError();
+    return tx.operation.findUniqueOrThrow({
+      where: { id: mutation.operationId },
+      include,
+    });
+  }
+
+  private recordMutation(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    operationId: string,
+    idempotencyKey: string,
+    requestHash: string,
+    action: string,
+  ) {
+    return tx.operationMutation.create({
+      data: {
+        userId,
+        operationId,
+        idempotencyKey,
+        requestHash,
+        action,
+      },
+    });
   }
 }
