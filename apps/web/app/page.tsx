@@ -2,6 +2,7 @@
 /* eslint-disable jsx-a11y/no-noninteractive-element-interactions -- native dialogs close when their backdrop is clicked; both dialogs also expose explicit close buttons */
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import { ApiClientError } from "../lib/api/client";
 import { authApi, SessionUser } from "../features/auth/api";
 import {
@@ -207,9 +208,14 @@ function AuthScreen({
   return (
     <main className="auth-shell">
       <section className="auth-brand">
-        <div className="brand brand-large">
-          <span className="brand-mark">BG</span>
-          <span>BetGarantida</span>
+        <div className="auth-logo">
+          <Image
+            src="/logo-login-bet-garantida.png"
+            alt="BetGarantida"
+            width={1452}
+            height={1086}
+            priority
+          />
         </div>
         <div className="auth-pitch">
           <span className="eyebrow">CONTROLE SEM COMPLICAÇÃO</span>
@@ -322,9 +328,19 @@ function Sidebar({
   ] as const;
   return (
     <aside className="sidebar">
-      <button className="brand" onClick={() => navigate("dashboard")}>
-        <span className="brand-mark">BG</span>
-        <span>BetGarantida</span>
+      <button
+        className="brand sidebar-logo"
+        onClick={() => navigate("dashboard")}
+        aria-label="Ir para a visão geral"
+        title="Ir para a visão geral"
+      >
+        <Image
+          src="/logo-bet-garantida.png"
+          alt="BetGarantida"
+          width={2048}
+          height={512}
+          priority
+        />
       </button>
       <nav>
         {nav.map(([id, icon, label]) => (
