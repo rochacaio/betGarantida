@@ -5,6 +5,7 @@ import { API_PREFIX } from "@betgarantida/contracts";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
 import { Express, json, urlencoded } from "express";
+import { validationException } from "./validation-exception";
 
 export async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
@@ -22,6 +23,7 @@ export async function bootstrap(): Promise<void> {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      exceptionFactory: validationException,
     }),
   );
 

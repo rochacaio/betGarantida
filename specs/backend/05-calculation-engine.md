@@ -26,11 +26,21 @@ stakeN = targetPayout / payoutMultiplierN
 
 Onde `payoutMultiplier` é `effectiveOdd` para caixa e `profitFactor` para crédito.
 
+Quando houver cashback em dinheiro, o balanceamento considera o valor recuperado
+no cenário em que a linha perde:
+
+```text
+balanceFactor = payoutMultiplier - cashbackPercent/100
+targetBalance = anchorStake × anchorBalanceFactor
+stakeN = targetBalance / balanceFactorN
+```
+
 Para cada cenário vencedor `i`:
 
 ```text
-scenarioResult[i] = payout[i] - realCashInvestment
-protectedReturn = mínimo dos payouts
+scenarioReturn[i] = payout[i] + soma do cashback em dinheiro das pernas perdedoras
+scenarioResult[i] = scenarioReturn[i] - realCashInvestment
+protectedReturn = mínimo dos retornos dos cenários
 projectedProfit = protectedReturn - realCashInvestment
 projectedRoi = projectedProfit / realCashInvestment × 100
 ```
@@ -38,7 +48,7 @@ projectedRoi = projectedProfit / realCashInvestment × 100
 Na liquidação:
 
 ```text
-realizedReturn = soma dos payouts das pernas WON
+realizedReturn = soma dos payouts das pernas WON + cashback em dinheiro das pernas LOST
 realizedProfit = realizedReturn - realCashInvestment
 realizedRoi = realizedProfit / realCashInvestment × 100
 ```
@@ -61,4 +71,3 @@ Cashback deve seguir exatamente as regras do README e possuir cenários de teste
 ## Fonte de verdade
 
 O cliente pode sugerir stakes automáticas. O endpoint de preview e os endpoints de escrita recalculam tudo. Campos calculados enviados pelo cliente são ignorados.
-

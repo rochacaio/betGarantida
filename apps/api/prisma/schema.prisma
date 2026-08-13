@@ -159,7 +159,7 @@ model WalletTransaction {
   user               User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
   bookmakerAccount   BookmakerAccount      @relation(fields: [bookmakerAccountId], references: [id], onDelete: Restrict)
   operation          Operation?            @relation(fields: [operationId], references: [id], onDelete: Restrict)
-  leg                BetLeg?               @relation(fields: [legId], references: [id], onDelete: Restrict)
+  leg                BetLeg?               @relation(fields: [legId], references: [id], onDelete: SetNull)
 
   @@unique([userId, idempotencyKey])
   @@index([bookmakerAccountId, occurredAt])
@@ -186,6 +186,7 @@ model Operation {
   realizedProfit      Decimal?            @map("realized_profit") @db.Decimal(19, 2)
   realizedRoiPercent  Decimal?            @map("realized_roi_percent") @db.Decimal(19, 6)
   engineVersion       String              @map("engine_version") @db.VarChar(32)
+  calculationSnapshot Json                @map("calculation_snapshot")
   version             Int                 @default(1)
   openedAt            DateTime            @default(now()) @map("opened_at") @db.Timestamptz(3)
   settledAt           DateTime?           @map("settled_at") @db.Timestamptz(3)

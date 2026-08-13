@@ -80,3 +80,46 @@ Pendências deliberadas:
 - `BET_STAKE`, `BET_REFUND`, `BET_RETURN` e `BONUS_USED` já existem no ledger, mas serão gravados pelos casos de uso das Specs 6 e 7 dentro da mesma transação da operação. Eles não devem chamar uma transação de carteira separada.
 - Resultado mensal por casa será implementado com o dashboard na Spec 8.
 - A rotina de reconciliação é interna; agendamento, alerta e endpoint administrativo pertencem à Spec 10.
+
+## Spec 05 — Motor de cálculo
+
+Status: implementada e validada.
+
+- Pacote puro `@betgarantida/calculation-engine`, sem dependência de NestJS, Prisma ou navegador.
+- Cálculos usam `Decimal` com precisão ampliada e `ROUND_HALF_UP`; dinheiro e stakes persistíveis são arredondados para centavos e os cenários são recalculados depois do arredondamento.
+- Suporta aumento sobre lucro, comissão sobre lucro, cashback em dinheiro, stakes manuais/automáticas, duas ou mais linhas e múltiplas linhas vencedoras.
+- Crédito de aposta usa `profitFactor`, não devolve a stake e não compõe investimento real nem denominador de ROI.
+- Balanceamento com cashback segue `payoutMultiplier - cashbackPercent/100`, conforme o README matemático.
+- Snapshot expõe resultados por cenário, retorno protegido, lucro, ROI, índice de arbitragem, política de arredondamento e `engineVersion` `1.0.0`.
+- Conversão de freebet, lucro líquido da promoção, liquidação e otimizador de centavos estão disponíveis como funções puras.
+- Valores `Decimal` podem ser serializados como strings para contratos JSON, sem perda por ponto flutuante.
+- Build, typecheck e 18 testes determinísticos do pacote passaram; a API anterior continuou compilando e passando seus testes.
+
+Pendências deliberadas:
+
+- A Spec 06 deve chamar este motor no servidor para preview e escrita, ignorar campos calculados pelo cliente e persistir o snapshot/versionamento retornado.
+- Cashback suportado nesta versão é retorno em dinheiro. Cashback concedido como crédito deve ser modelado pelo fluxo de créditos da Spec 07, sem tratá-lo como caixa.
+- A interface ainda mantém cálculos locais do protótipo. Na integração, eles podem servir como resposta visual imediata, mas o resultado canônico será sempre o recalculado pela API.
+
+## Spec 06 — Operações de surebet
+
+Status: implementada e validada sem banco externo.
+
+- Endpoints autenticados de preview, criação, listagem, detalhe, edição e cancelamento implementados em `/api/v1/operations`.
+- Preview progressivo aceita linhas automáticas sem stake e não exige evento/casa; criação e edição exigem evento e ao menos duas pernas completas.
+- O servidor ignora cálculos do cliente, usa o motor da Spec 05 e persiste o snapshot canônico completo, `engineVersion` e campos resumidos.
+- Criação bloqueia contas, valida propriedade/status, agrega stakes por casa, verifica saldos e grava operação, pernas, débitos e crédito `EXPECTED` em transação `SERIALIZABLE` com retry.
+- Crédito usado precisa estar `AVAILABLE`, pertencer ao usuário, ter valor integral compatível e não possuir consumidor; ele fica reservado pela operação sem ser consumido antes da liquidação.
+- Edição financeira aceita apenas `OPEN`, exige `version`, preserva stakes manuais e reconcilia atomicamente ledger, saldos, pernas e reservas de crédito.
+- Edições preservam histórico por `BET_REFUND` + novo `BET_STAKE`; a FK de uma movimentação para uma perna substituída usa `ON DELETE SET NULL`.
+- Cancelamento aceita apenas `OPEN`, exige `version`, estorna caixa, libera créditos reservados, cancela crédito esperado e cria auditoria na mesma transação.
+- Lista usa cursor, ordem decrescente e filtros por status, período, casa e evento; todas as consultas incluem o usuário autenticado.
+- Erros de validação globais agora expõem caminhos completos, inclusive `legs.1.odd`, para campos e toastrs do frontend.
+- Prisma validate/generate, lint, typecheck, build, 61 testes da API, 18 testes do motor e 2 E2E passaram.
+
+Pendências deliberadas:
+
+- As transações, locks, constraints e novas migrations ainda precisam ser aplicados e exercitados em PostgreSQL real quando o banco de teste/Neon for configurado.
+- Liquidação, crédito concedido/não concedido, consumo definitivo e resultado promocional combinado pertencem à Spec 07.
+- `Idempotency-Key` para as mutações financeiras de operações será uniformizado na implementação do contrato transversal da Spec 09; a Spec 07 já exige idempotência específica para liquidação.
+- O frontend continua mockado e será conectado aos contratos canônicos na Spec 12.

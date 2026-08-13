@@ -20,17 +20,26 @@ A operação nasce `OPEN`. O frontend começa com duas linhas vazias, mas isso �
 
 `POST /operations/preview` executa validação matemática e retorna stakes/snapshot sem persistir ou movimentar saldo. Serve ao balanceamento autoritativo e não reserva fundos.
 
+O preview é progressivo: não exige evento nem casa e aceita stake ausente nas
+linhas automáticas posteriores à âncora. Criar e editar continuam exigindo todas
+as pernas completas.
+
 ## Editar
 
 `PATCH /operations/:id` aceita dados editáveis e `version`. Apenas `OPEN` pode ser alterada financeiramente. O backend reconcilia os lançamentos antigos e novos atomicamente.
 
 Alterações manuais de stake são aceitas; o backend não deve rebalanceá-las silenciosamente. O cliente informa as stakes finais que deseja salvar, e o servidor recalcula somente os resultados.
 
+A substituição de pernas preserva o histórico financeiro: as stakes antigas são
+estornadas com `BET_REFUND`, as novas são debitadas com `BET_STAKE` e referências
+de ledger a pernas substituídas tornam-se nulas sem apagar os lançamentos.
+
 ## Consultar
 
 - Lista paginada, mais recentes primeiro.
 - Filtros por status, período, casa e busca textual no evento.
 - Detalhe inclui pernas, snapshot, crédito, resultados e versão.
+- O snapshot matemático completo é persistido como JSON junto de `engineVersion`.
 - Nunca retornar operações de outro usuário.
 
 ## Cancelar
@@ -48,4 +57,3 @@ Não há `DELETE` físico para operações com efeitos financeiros. Operações 
 - A operação não pode usar crédito originado por ela própria.
 - A mesma origem não pode ser selecionada por operações concorrentes.
 - Todos os campos obrigatórios geram erros estruturados por caminho, para o toastr e os campos do frontend.
-
