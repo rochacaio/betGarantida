@@ -27,5 +27,4 @@ describe("environment validation", () => {
     };
     expect(validateEnvironment(config)).toBe(config);
   });
-
 });
