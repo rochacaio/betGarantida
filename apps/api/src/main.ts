@@ -8,7 +8,7 @@ import { Express, json, urlencoded } from "express";
 import { validationException } from "./validation-exception";
 import { ApiExceptionFilter } from "./api-exception.filter";
 
-export async function bootstrap(): Promise<void> {
+async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   const appOrigin = process.env.APP_ORIGIN ?? "http://localhost:3000";
 
