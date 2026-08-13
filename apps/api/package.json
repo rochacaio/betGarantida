@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prebuild": "npm run build --workspace @betgarantida/contracts && npm run build --workspace @betgarantida/calculation-engine && prisma generate",
     "build": "nest build",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
