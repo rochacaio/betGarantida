@@ -34,4 +34,18 @@ describe("Initial domain migration", () => {
     );
     expect(migration).toContain("audit_logs_user_id_fkey");
   });
+
+  it("removes the legacy constraint that rejected free bet credits", () => {
+    const correction = readFileSync(
+      join(
+        migrationsRoot,
+        "20260813080000_remove_legacy_credit_constraint",
+        "migration.sql",
+      ),
+      "utf8",
+    );
+    expect(correction).toContain(
+      'DROP CONSTRAINT IF EXISTS "bet_legs_credit_reference_check"',
+    );
+  });
 });
