@@ -640,7 +640,7 @@ function SurebetTable({
         </thead>
         <tbody>
           {surebets.map((s) => {
-            const displayedProfit = s.combinedPromotionProfit ?? s.profit;
+            const displayedProfit = s.profit;
             return (
               <tr key={s.id}>
                 <td>
@@ -651,6 +651,25 @@ function SurebetTable({
                       ? " · resultado combinado"
                       : ""}
                   </small>
+                  {(s.generatesBetCredit ||
+                    s.legs.some((leg) => leg.usesBetCredit)) && (
+                    <div className="credit-badges">
+                      {s.generatesBetCredit && (
+                        <span className="credit-badge generated">
+                          {s.creditGenerated
+                            ? "↗ Crédito gerado"
+                            : "↗ Gera crédito"}
+                        </span>
+                      )}
+                      {s.legs.some((leg) => leg.usesBetCredit) && (
+                        <span className="credit-badge used">
+                          {s.legs.some((leg) => leg.usesFreeBetCredit)
+                            ? "● Usou crédito livre"
+                            : "● Usou crédito de bet"}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </td>
                 <td>
                   <div className="avatar-stack">

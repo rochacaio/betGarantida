@@ -535,6 +535,34 @@ td:first-child small {
   font-size: 8px;
   margin-top: 4px;
 }
+.credit-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+.credit-badge {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  padding: 3px 6px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+.credit-badge.generated {
+  color: #d8e852;
+  border-color: #576322;
+  background: #242b12;
+}
+.credit-badge.used {
+  color: #62dfa1;
+  border-color: #255d42;
+  background: #102b1e;
+}
 .avatar-stack {
   display: flex;
 }
