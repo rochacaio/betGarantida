@@ -64,6 +64,7 @@ type Surebet = {
   generatesBetCredit?: boolean;
   expectedBetCredit?: number;
   generatedCreditId?: string;
+  generatedCreditStatus?: string;
   generatedCreditConsumerOperationId?: string;
   creditGenerated?: boolean;
   combinedPromotionProfit?: number;
@@ -109,6 +110,7 @@ const mapOperation = (item: ApiOperation): Surebet => ({
       )
     : undefined,
   generatedCreditId: item.generatedCredit?.id,
+  generatedCreditStatus: item.generatedCredit?.status,
   generatedCreditConsumerOperationId:
     item.generatedCredit?.consumerOperation?.id ?? undefined,
   creditGenerated:
@@ -1756,8 +1758,7 @@ function Editor({
   const creditSources = surebets.filter(
     (s) =>
       s.generatedCreditId &&
-      s.creditGenerated &&
-      s.status === "WAITING_CREDIT_USE" &&
+      s.generatedCreditStatus === "AVAILABLE" &&
       (!s.generatedCreditConsumerOperationId ||
         s.generatedCreditConsumerOperationId === editing?.id) &&
       s.id !== editing?.id,
