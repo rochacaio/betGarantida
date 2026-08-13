@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import { Request, Response } from "express";
 import { randomUUID } from "node:crypto";
+import { Prisma } from "@prisma/client";
 
 interface ExceptionBody {
   code?: string;
@@ -26,6 +27,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
         : HttpStatus.INTERNAL_SERVER_ERROR;
     const body = this.body(exception);
     const requestId = this.requestId(request);
+    if (status >= 500) this.logUnexpected(exception, request, requestId);
     response.setHeader("X-Request-Id", requestId);
     response.status(status).json({
       error: {
@@ -35,6 +37,31 @@ export class ApiExceptionFilter implements ExceptionFilter {
         requestId,
       },
     });
+  }
+
+  private logUnexpected(
+    exception: unknown,
+    request: Request,
+    requestId: string,
+  ) {
+    const error = exception instanceof Error ? exception : undefined;
+    const prismaCode =
+      exception instanceof Prisma.PrismaClientKnownRequestError
+        ? exception.code
+        : undefined;
+    console.error(
+      JSON.stringify({
+        level: "error",
+        type: "unhandled_exception",
+        requestId,
+        method: request.method,
+        route: request.path,
+        errorName: error?.name ?? typeof exception,
+        ...(prismaCode ? { prismaCode } : {}),
+        message: error?.message ?? "Unknown error",
+        stack: error?.stack,
+      }),
+    );
   }
 
   private body(exception: unknown): ExceptionBody {
