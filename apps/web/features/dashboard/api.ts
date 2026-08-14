@@ -5,8 +5,11 @@ export type DashboardData = {
   metrics: {
     realizedProfit: string;
     realizedLoss: string;
+    creditGeneratingLoss: string;
+    creditConversionProfit: string;
     netResult: string;
     roiPercent: string;
+    contributedCapital: string;
     settledOperations: number;
     openStake: string;
     availableBalance: string;

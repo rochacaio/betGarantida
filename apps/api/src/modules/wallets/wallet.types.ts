@@ -22,6 +22,7 @@ export interface WalletTransactionRecord {
   amount: Decimal;
   occurredAt: Date;
   metadata: unknown;
+  idempotencyKey: string;
 }
 
 export interface FinancialCommand {

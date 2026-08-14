@@ -128,6 +128,7 @@ class MemoryWalletRepository implements WalletRepository {
       amount,
       occurredAt: new Date("2026-08-13T00:00:00Z"),
       metadata: null,
+      idempotencyKey: `test:${type}`,
     };
   }
 }

@@ -13,6 +13,10 @@ describe("DashboardService", () => {
           net: new Prisma.Decimal(15),
           investment: new Prisma.Decimal(100),
           settled: 2n,
+          definitive_loss: new Prisma.Decimal(3),
+          credit_source_loss: new Prisma.Decimal(2),
+          credit_conversion_profit: new Prisma.Decimal(8),
+          contributed_capital: new Prisma.Decimal(300),
         },
       ])
       .mockResolvedValueOnce([
@@ -53,9 +57,12 @@ describe("DashboardService", () => {
     );
     expect(result.metrics).toMatchObject({
       realizedProfit: "20.00",
-      realizedLoss: "5.00",
+      realizedLoss: "3.00",
+      creditGeneratingLoss: "2.00",
+      creditConversionProfit: "8.00",
       netResult: "15.00",
-      roiPercent: "15.000000",
+      roiPercent: "5.000000",
+      contributedCapital: "300.00",
       equity: "230.00",
     });
     expect(result.dailyEvolution).toHaveLength(31);

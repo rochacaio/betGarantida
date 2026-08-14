@@ -408,6 +408,13 @@ function Dashboard({
   onMonthChange: (month: string) => void;
 }) {
   const profit = Number(dashboard?.metrics.netResult ?? 0);
+  const definitiveLoss = Number(dashboard?.metrics.realizedLoss ?? 0);
+  const creditGeneratingLoss = Number(
+    dashboard?.metrics.creditGeneratingLoss ?? 0,
+  );
+  const creditConversionProfit = Number(
+    dashboard?.metrics.creditConversionProfit ?? 0,
+  );
   const daily = dashboard?.dailyEvolution ?? [];
   const max = Math.max(
     1,
@@ -431,6 +438,50 @@ function Dashboard({
   })
     .format(monthDate)
     .replace(".", "");
+  const today = new Date();
+  const isCurrentMonth =
+    year === today.getFullYear() && monthNumber === today.getMonth() + 1;
+  const chartDaily = isCurrentMonth
+    ? daily.slice(0, Math.min(today.getDate(), daily.length))
+    : daily;
+  const chartValues = chartDaily.map((item) => Number(item.accumulated));
+  const rawChartMin = Math.min(0, ...chartValues);
+  const rawChartMax = Math.max(0, ...chartValues);
+  const rawChartRange = rawChartMax - rawChartMin;
+  const chartPadding = rawChartRange === 0 ? 1 : rawChartRange * 0.12;
+  const chartMin =
+    rawChartRange === 0
+      ? 0
+      : rawChartMin - (rawChartMin < 0 ? chartPadding : 0);
+  const chartMax =
+    rawChartRange === 0
+      ? 1
+      : rawChartMax + (rawChartMax > 0 ? chartPadding : 0);
+  const chartRange = Math.max(1, chartMax - chartMin);
+  const chartWidth = 1000;
+  const chartHeight = 140;
+  const chartX = (index: number) =>
+    chartDaily.length <= 1
+      ? chartWidth
+      : (index / (chartDaily.length - 1)) * chartWidth;
+  const chartY = (value: number) =>
+    ((chartMax - value) / chartRange) * chartHeight;
+  const chartPoints = chartValues
+    .map((value, index) => `${chartX(index)},${chartY(value)}`)
+    .join(" ");
+  const zeroY = chartY(0);
+  const chartAreaPath = chartValues.length
+    ? `M ${chartValues
+        .map((value, index) => `${chartX(index)} ${chartY(value)}`)
+        .join(
+          " L ",
+        )} L ${chartX(chartValues.length - 1)} ${zeroY} L ${chartX(0)} ${zeroY} Z`
+    : "";
+  const chartTicks = Array.from(
+    { length: 5 },
+    (_, index) => chartMax - (index / 4) * chartRange,
+  );
+  const chartColor = profit >= 0 ? "var(--green)" : "var(--red)";
   const changeMonth = (offset: number) => {
     const next = new Date(
       Date.UTC(year ?? 2026, (monthNumber ?? 1) - 1 + offset, 1),
@@ -493,18 +544,45 @@ function Dashboard({
             <span className="metric-icon red">↘</span>
             <div>
               <span>Perdas</span>
-              <strong>
-                {money.format(Number(dashboard?.metrics.realizedLoss ?? 0))}
+              <strong>{money.format(definitiveLoss)}</strong>
+              <small>Perdas definitivas no período</small>
+            </div>
+          </article>
+          <article className="metric-card credit-conversion-card">
+            <span className="metric-icon credit">⇄</span>
+            <div>
+              <span>Perdas que geraram crédito</span>
+              <strong className="credit-conversion-values">
+                <span className="negative-text">
+                  − {money.format(creditGeneratingLoss)}
+                </span>
+                <span>/</span>
+                <span
+                  className={
+                    creditConversionProfit >= 0
+                      ? "positive-text"
+                      : "negative-text"
+                  }
+                >
+                  {creditConversionProfit >= 0 ? "+ " : "− "}
+                  {money.format(Math.abs(creditConversionProfit))}
+                </span>
               </strong>
-              <small>Perdas realizadas no período</small>
+              <small>Perda inicial / lucro convertido</small>
             </div>
           </article>
           <article className="metric-card">
             <span className="metric-icon amber">%</span>
             <div>
-              <span>ROI mensal</span>
+              <span>Lucro sobre aportes</span>
               <strong>{pct(Number(dashboard?.metrics.roiPercent ?? 0))}</strong>
-              <small>Sobre o caixa liquidado</small>
+              <small>
+                Sobre{" "}
+                {money.format(
+                  Number(dashboard?.metrics.contributedCapital ?? 0),
+                )}
+                em depósitos e saldos iniciais
+              </small>
             </div>
           </article>
         </div>
@@ -528,22 +606,79 @@ function Dashboard({
             </div>
             <div className="chart">
               <div className="chart-lines">
-                <span>R$ 400</span>
-                <span>R$ 300</span>
-                <span>R$ 200</span>
-                <span>R$ 100</span>
-                <span>R$ 0</span>
+                {chartTicks.map((tick, index) => (
+                  <span key={index}>{money.format(tick)}</span>
+                ))}
               </div>
               <div className="chart-area">
-                <div className="chart-fill" />
-                <div className="chart-path">●</div>
+                {chartValues.length > 0 && (
+                  <svg
+                    className="result-chart"
+                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    preserveAspectRatio="none"
+                    role="img"
+                    aria-label={`Evolução do resultado no mês, encerrando em ${money.format(profit)}`}
+                  >
+                    <defs>
+                      <linearGradient
+                        id="result-chart-fill"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="0%"
+                          stopColor={chartColor}
+                          stopOpacity="0.3"
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor={chartColor}
+                          stopOpacity="0.02"
+                        />
+                      </linearGradient>
+                    </defs>
+                    <line
+                      className="result-chart-zero"
+                      x1="0"
+                      x2={chartWidth}
+                      y1={zeroY}
+                      y2={zeroY}
+                    />
+                    <path d={chartAreaPath} fill="url(#result-chart-fill)" />
+                    <polyline
+                      points={chartPoints}
+                      fill="none"
+                      stroke={chartColor}
+                      strokeWidth="4"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    {chartValues.map((value, index) =>
+                      Number(chartDaily[index]?.result) !== 0 ? (
+                        <circle
+                          key={chartDaily[index]?.date}
+                          cx={chartX(index)}
+                          cy={chartY(value)}
+                          r="5"
+                          fill={
+                            Number(chartDaily[index]?.result) >= 0
+                              ? "var(--green)"
+                              : "var(--red)"
+                          }
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      ) : null,
+                    )}
+                  </svg>
+                )}
                 <div className="axis">
                   <span>01 {shortMonth}</span>
                   <span>08 {shortMonth}</span>
                   <span>15 {shortMonth}</span>
                   <span>22 {shortMonth}</span>
                   <span>
-                    {daily.length} {shortMonth}
+                    {chartDaily.length} {shortMonth}
                   </span>
                 </div>
               </div>
@@ -767,6 +902,7 @@ function Bookmakers({
   const [menuId, setMenuId] = useState<string>();
   const [selected, setSelected] = useState<Bookmaker>();
   const [transactions, setTransactions] = useState<ApiWalletTransaction[]>([]);
+  const [statementTab, setStatementTab] = useState<StatementTab>("all");
   const [action, setAction] = useState<
     "deposit" | "withdraw" | "adjust" | "edit"
   >();
@@ -809,6 +945,7 @@ function Bookmakers({
     setError("");
     setSelected(bookmaker);
     setTransactions([]);
+    setStatementTab("all");
     setMenuId(undefined);
     try {
       setTransactions((await bookmakersApi.transactions(bookmaker.id)).data);
@@ -957,6 +1094,9 @@ function Bookmakers({
       setSaving(false);
     }
   };
+  const visibleTransactions = transactions.filter((transaction) =>
+    transactionMatchesStatementTab(transaction, statementTab),
+  );
   return (
     <>
       <Topbar
@@ -1277,34 +1417,68 @@ function Bookmakers({
                 Fechar
               </button>
             </div>
+            <div
+              className="statement-tabs"
+              role="tablist"
+              aria-label="Filtrar extrato"
+            >
+              {statementTabs.map((tab) => {
+                const count = transactions.filter((transaction) =>
+                  transactionMatchesStatementTab(transaction, tab.id),
+                ).length;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={statementTab === tab.id}
+                    className={statementTab === tab.id ? "active" : ""}
+                    onClick={() => setStatementTab(tab.id)}
+                  >
+                    {tab.label}
+                    <span>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
             <div className="statement-content">
               {error && <p className="negative-text">{error}</p>}
-              {!error && transactions.length === 0 && (
+              {!error && visibleTransactions.length === 0 && (
                 <div className="empty-state">
-                  <h3>Nenhuma movimentação encontrada</h3>
-                  <p>Depósitos, apostas, retornos e ajustes aparecerão aqui.</p>
+                  <h3>Nenhuma movimentação nesta aba</h3>
+                  <p>{statementEmptyMessages[statementTab]}</p>
                 </div>
               )}
-              {transactions.map((item) => (
-                <div className="statement-row" key={item.id}>
-                  <div>
-                    <strong>{transactionLabel(item.type)}</strong>
-                    <small>
-                      {new Date(item.occurredAt).toLocaleString("pt-BR")}
-                    </small>
+              {visibleTransactions.map((item) => {
+                const counterparty = transferCounterparty(item, bookmakers);
+                return (
+                  <div className="statement-row" key={item.id}>
+                    <div>
+                      <strong>{transactionLabel(item)}</strong>
+                      {counterparty && (
+                        <span className="statement-counterparty">
+                          {item.type === "TRANSFER_IN"
+                            ? `Recebida de ${counterparty}`
+                            : `Enviada para ${counterparty}`}
+                        </span>
+                      )}
+                      <small>
+                        {new Date(item.occurredAt).toLocaleString("pt-BR")}
+                      </small>
+                    </div>
+                    <strong
+                      className={
+                        Number(item.amount) >= 0
+                          ? "positive-text"
+                          : "negative-text"
+                      }
+                    >
+                      {Number(item.amount) >= 0 ? "+ " : "− "}
+                      {money.format(Math.abs(Number(item.amount)))}
+                    </strong>
                   </div>
-                  <strong
-                    className={
-                      Number(item.amount) >= 0
-                        ? "positive-text"
-                        : "negative-text"
-                    }
-                  >
-                    {Number(item.amount) >= 0 ? "+ " : "− "}
-                    {money.format(Math.abs(Number(item.amount)))}
-                  </strong>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </dialog>
@@ -1408,7 +1582,77 @@ const transactionLabels: Record<string, string> = {
   BONUS_USED: "Crédito utilizado",
   ADJUSTMENT: "Ajuste manual",
 };
-const transactionLabel = (type: string) => transactionLabels[type] ?? type;
+const transactionLabel = (transaction: ApiWalletTransaction) => {
+  if (transaction.activity === "BET_EDIT_REFUND")
+    return "Saldo devolvido para edição";
+  if (transaction.activity === "BET_EDIT_STAKE")
+    return "Valor reaplicado após edição";
+  if (transaction.activity === "BET_CANCEL_REFUND")
+    return "Estorno por exclusão da aposta";
+  return transactionLabels[transaction.type] ?? transaction.type;
+};
+
+type StatementTab =
+  | "all"
+  | "withdrawals"
+  | "deposits"
+  | "winnings"
+  | "refunds"
+  | "transfers";
+
+const statementTabs: { id: StatementTab; label: string }[] = [
+  { id: "all", label: "Tudo" },
+  { id: "withdrawals", label: "Saques" },
+  { id: "deposits", label: "Depósitos" },
+  { id: "winnings", label: "Ganhos das bets" },
+  { id: "refunds", label: "Dinheiro retornado" },
+  { id: "transfers", label: "Transferências" },
+];
+
+const statementTabTypes: Record<StatementTab, string[]> = {
+  all: [],
+  withdrawals: ["WITHDRAWAL"],
+  deposits: ["INITIAL_BALANCE", "DEPOSIT"],
+  winnings: ["BET_RETURN"],
+  refunds: ["BET_REFUND"],
+  transfers: ["TRANSFER_IN", "TRANSFER_OUT"],
+};
+
+const transactionMatchesStatementTab = (
+  transaction: ApiWalletTransaction,
+  tab: StatementTab,
+) => tab === "all" || statementTabTypes[tab].includes(transaction.type);
+
+const statementEmptyMessages: Record<StatementTab, string> = {
+  all: "Depósitos, apostas, retornos e ajustes aparecerão aqui.",
+  withdrawals: "Os saques realizados nesta casa aparecerão aqui.",
+  deposits: "Os depósitos e o saldo inicial aparecerão aqui.",
+  winnings: "Os valores recebidos pelas bets ganhadoras aparecerão aqui.",
+  refunds: "Valores devolvidos por exclusões ou cancelamentos aparecerão aqui.",
+  transfers: "Transferências recebidas e enviadas aparecerão aqui.",
+};
+
+const transferCounterparty = (
+  transaction: ApiWalletTransaction,
+  bookmakers: Bookmaker[],
+) => {
+  if (transaction.type !== "TRANSFER_IN" && transaction.type !== "TRANSFER_OUT")
+    return undefined;
+  if (
+    !transaction.metadata ||
+    typeof transaction.metadata !== "object" ||
+    Array.isArray(transaction.metadata)
+  )
+    return "outra casa";
+  const id = (transaction.metadata as Record<string, unknown>)[
+    "counterpartyBookmakerAccountId"
+  ];
+  if (typeof id !== "string") return "outra casa";
+  return (
+    bookmakers.find((bookmaker) => bookmaker.id === id)?.name ?? "outra casa"
+  );
+};
+
 const actionTitle = (action: "deposit" | "withdraw" | "adjust" | "edit") =>
   ({
     deposit: "Depositar",

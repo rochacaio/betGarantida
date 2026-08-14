@@ -17,6 +17,7 @@ export type ApiWalletTransaction = {
   amount: string;
   occurredAt: string;
   metadata?: unknown;
+  activity?: "BET_EDIT_REFUND" | "BET_CANCEL_REFUND" | "BET_EDIT_STAKE";
 };
 export const bookmakersApi = {
   list: () => api<{ data: ApiBookmaker[] }>("/bookmaker-accounts"),

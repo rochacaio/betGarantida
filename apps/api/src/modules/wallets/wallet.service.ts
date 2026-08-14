@@ -181,6 +181,7 @@ export class WalletService {
         amount: item.amount.toFixed(2),
         occurredAt: item.occurredAt.toISOString(),
         metadata: item.metadata,
+        activity: walletActivity(item.type, item.idempotencyKey),
       })),
       pageInfo: {
         nextCursor: result.nextCursor,
@@ -313,3 +314,13 @@ export class WalletService {
     return createHash("sha256").update(JSON.stringify(parts)).digest("hex");
   }
 }
+
+const walletActivity = (type: string, idempotencyKey: string) => {
+  if (type === "BET_REFUND")
+    return idempotencyKey.startsWith("edit-refund:")
+      ? "BET_EDIT_REFUND"
+      : "BET_CANCEL_REFUND";
+  if (type === "BET_STAKE" && idempotencyKey.includes(":edit-"))
+    return "BET_EDIT_STAKE";
+  return undefined;
+};
