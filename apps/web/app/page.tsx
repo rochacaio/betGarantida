@@ -762,7 +762,7 @@ function SurebetTable({
         ? "Aguardando uso do crédito"
         : "Liquidada";
   return (
-    <div className="table-wrap">
+    <div className="table-wrap surebet-table-wrap">
       <table>
         <thead>
           <tr>

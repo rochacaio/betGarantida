@@ -1896,3 +1896,396 @@ dialog.edit-drawer-backdrop {
 dialog.edit-drawer-backdrop {
   padding: 0;
 }
+
+/* Mobile layout: desktop rules above remain unchanged. */
+@media (max-width: 600px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+  .workspace {
+    padding-bottom: calc(78px + env(safe-area-inset-bottom));
+  }
+  .sidebar {
+    height: calc(74px + env(safe-area-inset-bottom));
+    padding: 6px 5px calc(6px + env(safe-area-inset-bottom));
+  }
+  .sidebar nav button {
+    height: 61px;
+    min-width: 0;
+    padding: 5px 2px;
+    line-height: 1.15;
+  }
+  .sidebar nav button span {
+    line-height: 1;
+  }
+  .topbar {
+    min-height: 0;
+    padding: 17px 14px;
+  }
+  .topbar h1 {
+    font-size: 22px;
+  }
+  .topbar p {
+    max-width: none;
+    line-height: 1.45;
+  }
+  .topbar .header-actions,
+  .topbar-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 7px;
+  }
+  .topbar .header-actions > .primary:only-child,
+  .topbar-actions > .primary:only-child {
+    grid-column: 1 / -1;
+  }
+  .topbar .header-actions .primary,
+  .topbar-actions .primary {
+    padding-inline: 11px;
+  }
+  .month-pill {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 10px;
+  }
+  .content,
+  .content.editor-content {
+    padding: 14px;
+  }
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .profit-card,
+  .metric-card {
+    grid-column: auto;
+    grid-row: auto;
+    margin: 0;
+  }
+  .profit-card {
+    min-height: 150px;
+    padding: 18px;
+  }
+  .metric-card {
+    min-height: 82px;
+    padding: 14px;
+  }
+  .metric-card .credit-conversion-values {
+    white-space: normal;
+    flex-wrap: wrap;
+  }
+  .dashboard-grid {
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .panel {
+    padding: 15px;
+    border-radius: 14px;
+  }
+  .panel-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .chart {
+    height: 190px;
+    margin-top: 16px;
+  }
+  .chart-lines {
+    width: 52px;
+    font-size: 7px;
+  }
+  .axis span:nth-child(2),
+  .axis span:nth-child(4) {
+    display: none;
+  }
+  .summary-strip {
+    padding: 10px 0;
+  }
+  .summary-strip > div {
+    padding: 8px 14px;
+  }
+  .section-heading {
+    margin: 24px 0 13px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .section-heading > button,
+  .section-heading .primary {
+    width: 100%;
+  }
+  .tabs {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .tabs button {
+    flex: 0 0 auto;
+  }
+  .list-panel {
+    padding-top: 12px;
+  }
+  .filters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .filters .search {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+  .filters .search input {
+    width: 100%;
+    min-width: 0;
+  }
+  .filters .secondary {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 8px;
+  }
+  .surebet-table-wrap {
+    margin: 12px 0 0;
+    overflow: visible;
+  }
+  .surebet-table-wrap table,
+  .surebet-table-wrap tbody,
+  .surebet-table-wrap tr,
+  .surebet-table-wrap td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+  .surebet-table-wrap thead {
+    display: none;
+  }
+  .surebet-table-wrap tbody {
+    display: grid;
+    gap: 10px;
+  }
+  .surebet-table-wrap tr {
+    padding: 15px;
+    border: 1px solid var(--line);
+    border-radius: 13px;
+    background: #0a1c13;
+  }
+  .surebet-table-wrap td {
+    display: grid;
+    grid-template-columns: 105px minmax(0, 1fr);
+    align-items: center;
+    gap: 9px;
+    padding: 9px 0;
+    border-bottom: 1px solid #173024;
+    text-align: right;
+  }
+  .surebet-table-wrap td::before {
+    color: #62776a;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-align: left;
+    text-transform: uppercase;
+  }
+  .surebet-table-wrap td:nth-child(1) {
+    display: block;
+    padding-top: 0;
+    text-align: left;
+  }
+  .surebet-table-wrap td:nth-child(1)::before {
+    display: none;
+  }
+  .surebet-table-wrap td:nth-child(2)::before {
+    content: "Casas";
+  }
+  .surebet-table-wrap td:nth-child(3)::before {
+    content: "Investido";
+  }
+  .surebet-table-wrap td:nth-child(4)::before {
+    content: "Resultado";
+  }
+  .surebet-table-wrap td:nth-child(5)::before {
+    content: "ROI";
+  }
+  .surebet-table-wrap td:nth-child(6)::before {
+    content: "Status";
+  }
+  .surebet-table-wrap td:nth-child(7) {
+    display: block;
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+  .surebet-table-wrap td:nth-child(7)::before {
+    display: none;
+  }
+  .surebet-table-wrap .avatar-stack,
+  .surebet-table-wrap .status {
+    justify-self: end;
+  }
+  .surebet-table-wrap .surebet-actions {
+    justify-content: stretch;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .surebet-table-wrap .credit-lost-operation {
+    grid-column: 1 / -1;
+    min-height: 38px;
+  }
+  .surebet-table-wrap .delete-operation {
+    min-height: 38px;
+  }
+  .bookmaker-grid {
+    gap: 10px;
+  }
+  .bookmaker-card {
+    padding: 17px;
+  }
+  .bookmaker-menu {
+    position: fixed !important;
+    left: 14px !important;
+    right: 14px !important;
+    top: auto !important;
+    bottom: calc(84px + env(safe-area-inset-bottom)) !important;
+    width: auto !important;
+  }
+  .statement-drawer {
+    width: 100vw;
+    max-width: 100vw;
+  }
+  .statement-tabs {
+    padding: 12px 14px 0;
+  }
+  .statement-content {
+    padding: 14px;
+  }
+  .statement-row {
+    gap: 12px;
+  }
+  .statement-row > strong {
+    white-space: nowrap;
+  }
+  .drawer-header {
+    min-height: 82px;
+    gap: 10px;
+  }
+  .drawer-header h2 {
+    font-size: 17px;
+  }
+  .drawer-header .secondary {
+    padding-inline: 11px;
+  }
+  .modal-backdrop,
+  .credit-decision-backdrop {
+    align-items: end;
+    padding: 10px;
+  }
+  .modal,
+  .credit-decision {
+    width: 100%;
+    max-height: calc(100dvh - 20px);
+    overflow-y: auto;
+    padding: 20px 17px;
+    border-radius: 18px 18px 12px 12px;
+  }
+  .modal-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .modal-actions button {
+    width: 100%;
+    padding-inline: 9px;
+  }
+  .editor-intro {
+    margin-bottom: 12px;
+  }
+  .operation-summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+  }
+  .operation-summary > div {
+    padding: 0 8px;
+  }
+  .operation-summary > div:first-child {
+    padding-left: 0;
+  }
+  .operation-summary strong {
+    font-size: 12px;
+  }
+  .credit-generator {
+    gap: 15px;
+    padding: 14px;
+  }
+  .credit-generator > div:first-child p {
+    margin-left: 0;
+    line-height: 1.45;
+  }
+  .builder-top {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .guarantee {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .guarantee div {
+    text-align: left;
+  }
+  .legs {
+    padding: 0 14px;
+  }
+  .leg-row,
+  .embedded-editor .leg-row {
+    grid-template-columns: 27px minmax(0, 1fr);
+    gap: 9px;
+    padding-top: 17px;
+  }
+  .leg-row > .field,
+  .embedded-editor .leg-row > .field,
+  .leg-row > .effective,
+  .embedded-editor .leg-row > .effective,
+  .leg-row > .outcome-control,
+  .embedded-editor .leg-row > .outcome-control {
+    grid-column: 2;
+    width: 100%;
+  }
+  .outcome-control {
+    margin-left: 0;
+  }
+  .outcome-control > div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .outcome-control button {
+    width: 100%;
+  }
+  .remove-leg {
+    right: 0;
+  }
+  .leg-credit {
+    padding: 10px 0 0 36px;
+  }
+  .add-leg {
+    min-height: 42px;
+    margin: 10px 14px 14px;
+  }
+  .editor-bottom {
+    gap: 10px;
+  }
+  .embedded-editor {
+    padding: 14px;
+  }
+  .edit-drawer {
+    width: 100vw;
+    max-width: 100vw;
+  }
+  .auth-panel {
+    min-height: 100dvh;
+    padding: 22px 17px;
+  }
+  .auth-card {
+    width: 100%;
+  }
+}
