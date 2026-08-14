@@ -58,7 +58,7 @@ Ao liquidar a consumidora:
 combinedPromotionProfit = qualificationRealizedProfit + consumerRealizedProfit
 ```
 
-O campo é retornado como visão nas duas operações relacionadas. Não gera transação adicional e não deve ser somado novamente no dashboard.
+O campo é retornado como visão apenas na operação consumidora. A operação geradora e a consumidora preservam seus resultados individuais; o combinado é somente uma informação complementar. Ele não gera transação adicional e nunca é somado no dashboard.
 
 ## Casos de borda
 
@@ -68,3 +68,4 @@ O campo é retornado como visão nas duas operações relacionadas. Não gera tr
 - Falha ao concluir qualquer participante reverte liquidação e lançamentos inteiros.
 - Repetir a liquidação com a mesma chave retorna o resultado anterior.
 - Chave diferente em operação já liquidada retorna conflito.
+- Um crédito `AVAILABLE` ainda não reservado pode ser marcado como perdido. Ele passa a `EXPIRED`, e a geradora passa de `WAITING_CREDIT_USE` para `SETTLED` sem novos lançamentos financeiros.

@@ -17,6 +17,7 @@ import {
   OperationCreditUnavailableError,
   OperationCreditReservedError,
   OperationCreditCorrectionUnavailableError,
+  OperationCreditExpirationUnavailableError,
   OperationDeleteCreditInUseError,
   OperationIdempotencyConflictError,
   OperationInsufficientBalanceError,
@@ -751,6 +752,92 @@ export class PrismaOperationsRepository implements OperationsRepository {
             input.idempotencyKey,
             input.requestHash,
             "DELETE",
+          );
+          return tx.operation.findUniqueOrThrow({
+            where: { id: operation.id },
+            include,
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    );
+  }
+
+  expireGeneratedCredit(input: {
+    userId: string;
+    operationId: string;
+    version: number;
+    idempotencyKey: string;
+    requestHash: string;
+  }) {
+    return this.serializable(() =>
+      this.prisma.$transaction(
+        async (tx) => {
+          const replay = await this.idempotentReplay(
+            tx,
+            input.userId,
+            input.idempotencyKey,
+            input.requestHash,
+          );
+          if (replay) return replay;
+          await this.lockOperation(tx, input.userId, input.operationId);
+          const operation = await tx.operation.findFirst({
+            where: { id: input.operationId, userId: input.userId },
+            include,
+          });
+          if (!operation) throw new OperationNotFoundError();
+          if (operation.version !== input.version)
+            throw new OperationStaleVersionError();
+          if (
+            operation.status !== OperationStatus.WAITING_CREDIT_USE ||
+            !operation.generatedCredit ||
+            operation.generatedCredit.status !== BetCreditStatus.AVAILABLE ||
+            operation.generatedCredit.consumerOperationId !== null
+          )
+            throw new OperationCreditExpirationUnavailableError();
+
+          const now = new Date();
+          await tx.betCredit.update({
+            where: { id: operation.generatedCredit.id },
+            data: { status: BetCreditStatus.EXPIRED },
+          });
+          await this.auditCredit(
+            tx,
+            input.userId,
+            operation.generatedCredit.id,
+            "BET_CREDIT_EXPIRED",
+          );
+          await tx.auditLog.create({
+            data: {
+              userId: input.userId,
+              action: "OPERATION_SETTLED_CREDIT_EXPIRED",
+              resourceType: "OPERATION",
+              resourceId: operation.id,
+              before: {
+                status: operation.status,
+                version: operation.version,
+              },
+              after: {
+                status: OperationStatus.SETTLED,
+                version: operation.version + 1,
+              },
+            },
+          });
+          await tx.operation.update({
+            where: { id: operation.id },
+            data: {
+              status: OperationStatus.SETTLED,
+              settledAt: now,
+              version: { increment: 1 },
+            },
+          });
+          await this.recordMutation(
+            tx,
+            input.userId,
+            operation.id,
+            input.idempotencyKey,
+            input.requestHash,
+            "EXPIRE_GENERATED_CREDIT",
           );
           return tx.operation.findUniqueOrThrow({
             where: { id: operation.id },

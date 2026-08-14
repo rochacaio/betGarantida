@@ -29,6 +29,7 @@ import {
   OperationCreditUnavailableError,
   OperationCreditReservedError,
   OperationCreditCorrectionUnavailableError,
+  OperationCreditExpirationUnavailableError,
   OperationDeleteCreditInUseError,
   OperationInsufficientBalanceError,
   OperationIdempotencyConflictError,
@@ -293,6 +294,28 @@ export class OperationsService {
     };
   }
 
+  async expireGeneratedCredit(
+    userId: string,
+    id: string,
+    version: number,
+    idempotencyKey: string,
+  ) {
+    this.assertIdempotencyKey(idempotencyKey);
+    return {
+      operation: this.response(
+        await this.execute(() =>
+          this.repository.expireGeneratedCredit({
+            userId,
+            operationId: id,
+            version,
+            idempotencyKey,
+            requestHash: this.hash(["EXPIRE_GENERATED_CREDIT", id, version]),
+          }),
+        ),
+      ),
+    };
+  }
+
   private command(
     userId: string,
     dto: CreateOperationDto,
@@ -466,6 +489,12 @@ export class OperationsService {
           message:
             "O crédito só pode ser corrigido enquanto aguarda uso e ainda não foi reservado por outra surebet.",
         });
+      if (error instanceof OperationCreditExpirationUnavailableError)
+        throw new ConflictException({
+          code: "BET_CREDIT_EXPIRATION_UNAVAILABLE",
+          message:
+            "O crédito só pode ser marcado como perdido enquanto estiver disponível e sem reserva em outra surebet.",
+        });
       if (error instanceof OperationDeleteCreditInUseError)
         throw new ConflictException({
           code: "BET_CREDIT_IN_USE",
@@ -524,11 +553,13 @@ export class OperationsService {
   }
 
   private combinedPromotionProfit(operation: OperationRecord): string | null {
-    const related =
-      operation.generatedCredit?.consumerOperation?.realizedProfit ??
-      operation.consumedCredits[0]?.sourceOperation.realizedProfit;
-    if (!related || !operation.realizedProfit) return null;
-    return operation.realizedProfit.add(related).toFixed(2);
+    if (!operation.realizedProfit || operation.consumedCredits.length === 0)
+      return null;
+    const qualificationProfit = operation.consumedCredits.reduce(
+      (total, credit) => total.add(credit.sourceOperation.realizedProfit ?? 0),
+      new Prisma.Decimal(0),
+    );
+    return operation.realizedProfit.add(qualificationProfit).toFixed(2);
   }
 
   private assertIdempotencyKey(key: string) {

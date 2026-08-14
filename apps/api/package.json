@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
-    "prisma:migrate:deploy": "prisma migrate deploy"
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "admin:reset-user": "node scripts/reset-user-data.cjs"
   },
   "dependencies": {
     "@betgarantida/calculation-engine": "0.1.0",

@@ -104,6 +104,15 @@ export const operationsApi = {
         }),
       },
     ),
+  expireGeneratedCredit: (operation: { id: string; version: number }) =>
+    api<{ operation: ApiOperation }>(
+      `/operations/${operation.id}/generated-credit/expire`,
+      {
+        method: "POST",
+        headers: commandHeaders(),
+        body: JSON.stringify({ version: operation.version }),
+      },
+    ),
   cancel: (operation: { id: string; version: number }, reason?: string) =>
     api<{ operation: ApiOperation }>(`/operations/${operation.id}/cancel`, {
       method: "POST",

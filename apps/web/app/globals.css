@@ -587,6 +587,14 @@ td:first-child small {
 .negative-text {
   color: var(--red) !important;
 }
+.operation-combined {
+  display: block;
+  margin-top: 4px;
+  font-size: 7px;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0.8;
+}
 .status {
   display: inline-flex;
   padding: 5px 8px;
@@ -855,6 +863,19 @@ td:first-child small {
 }
 .delete-operation:hover {
   background: #36181e;
+}
+.credit-lost-operation {
+  border: 1px solid #6f5b27;
+  border-radius: 8px;
+  background: #28220f;
+  color: #e4cf64;
+  padding: 6px 9px;
+  font-size: 8px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.credit-lost-operation:hover {
+  background: #3a3114;
 }
 .field {
   display: grid;

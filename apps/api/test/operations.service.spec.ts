@@ -17,6 +17,7 @@ import {
   OperationInsufficientBalanceError,
   OperationNotFoundError,
   OperationNotOpenError,
+  OperationRecord,
   OperationsRepository,
   OperationStaleVersionError,
 } from "../src/modules/operations/operations.types";
@@ -103,6 +104,7 @@ describe("OperationsService", () => {
       cancel: jest.fn(),
       settle: jest.fn(),
       correctGeneratedCredit: jest.fn(),
+      expireGeneratedCredit: jest.fn(),
       deleteOperation: jest.fn(),
     };
     service = new OperationsService(repository);
@@ -117,6 +119,39 @@ describe("OperationsService", () => {
       engineVersion: "1.0.0",
     });
     expect(repository.create.mock.calls).toHaveLength(0);
+  });
+
+  it("expõe o combinado somente na consumidora sem alterar lucros individuais", async () => {
+    const qualification = {
+      ...record(),
+      id: "50000000-0000-4000-8000-000000000001",
+      realizedProfit: new Prisma.Decimal("-5.00"),
+    } as OperationRecord;
+    const consumer = {
+      ...record(),
+      id: "60000000-0000-4000-8000-000000000001",
+      realizedProfit: new Prisma.Decimal("12.00"),
+      consumedCredits: [
+        {
+          sourceOperation: qualification,
+        },
+      ],
+    } as unknown as OperationRecord;
+    repository.list.mockResolvedValue({
+      items: [qualification, consumer],
+      nextCursor: null,
+    });
+
+    const result = await service.list(userId, { limit: 100 });
+
+    expect(result.data[0]).toMatchObject({
+      realizedProfit: "-5.00",
+      combinedPromotionProfit: null,
+    });
+    expect(result.data[1]).toMatchObject({
+      realizedProfit: "12.00",
+      combinedPromotionProfit: "7.00",
+    });
   });
 
   it("rebalanceia somente linhas explicitamente automáticas no preview", () => {
@@ -213,6 +248,23 @@ describe("OperationsService", () => {
     expect(command.operationId).toBe(operationId);
     expect(command.version).toBe(2);
     expect(command.grantedCreditAmount.toFixed(2)).toBe("25.00");
+  });
+
+  it("finaliza a geradora quando o crédito disponível foi perdido", async () => {
+    repository.expireGeneratedCredit.mockResolvedValue({
+      ...record(),
+      status: OperationStatus.SETTLED,
+      version: 3,
+    });
+    await service.expireGeneratedCredit(userId, operationId, 2, idempotencyKey);
+    expect(repository.expireGeneratedCredit.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        userId,
+        operationId,
+        version: 2,
+        idempotencyKey,
+      }),
+    );
   });
 
   it.each([

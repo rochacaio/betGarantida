@@ -612,11 +612,13 @@ function SurebetTable({
   bookmakers,
   onEdit,
   onDelete,
+  onCreditLost,
 }: {
   surebets: Surebet[];
   bookmakers: Bookmaker[];
   onEdit?: (s: Surebet) => void;
   onDelete?: (s: Surebet) => void;
+  onCreditLost?: (s: Surebet) => void;
 }) {
   const statusLabel = (status: Surebet["status"]) =>
     status === "OPEN"
@@ -647,9 +649,6 @@ function SurebetTable({
                   <strong>{s.event}</strong>
                   <small>
                     {s.title} · {s.date}
-                    {s.combinedPromotionProfit !== undefined
-                      ? " · resultado combinado"
-                      : ""}
                   </small>
                   {(s.generatesBetCredit ||
                     s.legs.some((leg) => leg.usesBetCredit)) && (
@@ -696,6 +695,16 @@ function SurebetTable({
                   {s.status === "OPEN"
                     ? "—"
                     : `${displayedProfit >= 0 ? "+ " : "− "}${money.format(Math.abs(displayedProfit))}`}
+                  {s.status !== "OPEN" &&
+                    s.combinedPromotionProfit !== undefined && (
+                      <small
+                        className={`operation-combined ${s.combinedPromotionProfit >= 0 ? "positive-text" : "negative-text"}`}
+                      >
+                        Combinado com crédito:{" "}
+                        {s.combinedPromotionProfit >= 0 ? "+ " : "− "}
+                        {money.format(Math.abs(s.combinedPromotionProfit))}
+                      </small>
+                    )}
                 </td>
                 <td>{s.status === "OPEN" ? "—" : pct(s.roi)}</td>
                 <td>
@@ -705,6 +714,18 @@ function SurebetTable({
                 </td>
                 <td>
                   <div className="surebet-actions">
+                    {onCreditLost &&
+                      s.status === "WAITING_CREDIT_USE" &&
+                      s.generatedCreditStatus === "AVAILABLE" &&
+                      !s.generatedCreditConsumerOperationId && (
+                        <button
+                          type="button"
+                          className="credit-lost-operation"
+                          onClick={() => onCreditLost(s)}
+                        >
+                          Crédito de aposta perdido
+                        </button>
+                      )}
                     {onDelete && (
                       <button
                         type="button"
@@ -1402,12 +1423,14 @@ function Surebets({
   navigate,
   save,
   onDelete,
+  onCreditLost,
 }: {
   surebets: Surebet[];
   bookmakers: Bookmaker[];
   navigate: (s: Screen) => void;
   save: (s: Surebet, stay?: boolean) => Promise<void>;
   onDelete: (s: Surebet) => Promise<void>;
+  onCreditLost: (s: Surebet) => Promise<void>;
 }) {
   const [editing, setEditing] = useState<Surebet>();
   return (
@@ -1454,6 +1477,14 @@ function Surebets({
                 )
               )
                 void onDelete(surebet);
+            }}
+            onCreditLost={(surebet) => {
+              if (
+                window.confirm(
+                  `Marcar o crédito de "${surebet.event}" como perdido? A bet será finalizada com seu resultado original e o crédito não poderá mais ser usado.`,
+                )
+              )
+                void onCreditLost(surebet);
             }}
           />
         </article>
@@ -2039,7 +2070,11 @@ function Editor({
         .filter((id): id is string => !!id),
     );
     const qualificationResult = surebets
-      .filter((operation) => sourceIds.has(operation.id))
+      .filter(
+        (operation) =>
+          operation.generatedCreditId &&
+          sourceIds.has(operation.generatedCreditId),
+      )
       .reduce((sum, operation) => sum + operation.profit, 0);
     void Promise.resolve(
       onSave({
@@ -2446,6 +2481,23 @@ export default function Home() {
       );
     }
   };
+  const markCreditAsLost = async (surebet: Surebet) => {
+    try {
+      await operationsApi.expireGeneratedCredit(surebet);
+      await refresh();
+      showToast(
+        "success",
+        "Crédito marcado como perdido",
+        "A surebet foi finalizada com seu resultado original.",
+      );
+    } catch (failure) {
+      showToast(
+        "error",
+        "Não foi possível finalizar",
+        errorMessage(failure, "Tente novamente."),
+      );
+    }
+  };
   const body = (() => {
     if (screen === "dashboard")
       return (
@@ -2474,6 +2526,7 @@ export default function Home() {
           navigate={navigate}
           save={save}
           onDelete={deleteSurebet}
+          onCreditLost={markCreditAsLost}
         />
       );
     return (

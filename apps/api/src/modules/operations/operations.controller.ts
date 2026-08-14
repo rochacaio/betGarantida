@@ -24,6 +24,7 @@ import { OperationsService } from "./operations.service";
 import { SettleOperationDto } from "./dto/settle-operation.dto";
 import { CorrectGeneratedCreditDto } from "./dto/correct-generated-credit.dto";
 import { DeleteOperationDto } from "./dto/delete-operation.dto";
+import { ExpireGeneratedCreditDto } from "./dto/expire-generated-credit.dto";
 
 @ApiTags("operations")
 @ApiCookieAuth("betgarantida_session")
@@ -108,6 +109,21 @@ export class OperationsController {
       user.id,
       id,
       dto,
+      idempotencyKey,
+    );
+  }
+
+  @Post(":id/generated-credit/expire")
+  expireGeneratedCredit(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: ExpireGeneratedCreditDto,
+    @Headers("idempotency-key") idempotencyKey = "",
+  ) {
+    return this.operations.expireGeneratedCredit(
+      user.id,
+      id,
+      dto.version,
       idempotencyKey,
     );
   }
