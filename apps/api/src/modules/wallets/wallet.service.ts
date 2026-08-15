@@ -68,6 +68,20 @@ export class WalletService {
     });
   }
 
+  freeWinning(input: {
+    userId: string;
+    bookmakerAccountId: string;
+    amount: string;
+    description?: string;
+    idempotencyKey: string;
+  }) {
+    return this.apply({
+      ...input,
+      type: WalletTransactionType.BONUS_RECEIVED,
+      sign: 1,
+    });
+  }
+
   withdraw(input: {
     userId: string;
     bookmakerAccountId: string;

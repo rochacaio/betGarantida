@@ -168,6 +168,21 @@ describe("WalletService", () => {
     expect(repository.lastFinancialCommand?.amount.toFixed(2)).toBe("25.10");
   });
 
+  it("records free winnings as profit without classifying them as deposits", async () => {
+    const result = await service.freeWinning({
+      userId: "user-1",
+      bookmakerAccountId: "account-1",
+      amount: "3.00",
+      description: "40 giros grátis",
+      idempotencyKey: "free-winning-0001",
+    });
+    expect(result.availableBalance).toBe("3.00");
+    expect(repository.lastFinancialCommand).toMatchObject({
+      type: WalletTransactionType.BONUS_RECEIVED,
+      reason: "40 giros grátis",
+    });
+  });
+
   it("records withdrawals as negative amounts", async () => {
     repository.balance = new Prisma.Decimal("100.00");
     await service.withdraw({

@@ -537,6 +537,8 @@ function Dashboard({
               </strong>
               <small>
                 {dashboard?.metrics.settledOperations ?? 0} entradas liquidadas
+                {Number(dashboard?.metrics.freeWinnings ?? 0) > 0 &&
+                  ` · ${money.format(Number(dashboard?.metrics.freeWinnings ?? 0))} em ganhos grátis`}
               </small>
             </div>
           </article>
@@ -904,7 +906,7 @@ function Bookmakers({
   const [transactions, setTransactions] = useState<ApiWalletTransaction[]>([]);
   const [statementTab, setStatementTab] = useState<StatementTab>("all");
   const [action, setAction] = useState<
-    "deposit" | "withdraw" | "adjust" | "edit"
+    "deposit" | "withdraw" | "adjust" | "bonus" | "edit"
   >();
   const [actionAmount, setActionAmount] = useState("");
   const [actionReason, setActionReason] = useState("");
@@ -960,7 +962,7 @@ function Bookmakers({
   };
   const openAction = (
     bookmaker: Bookmaker,
-    next: "deposit" | "withdraw" | "adjust" | "edit",
+    next: "deposit" | "withdraw" | "adjust" | "bonus" | "edit",
   ) => {
     setSelected(bookmaker);
     setAction(next);
@@ -989,6 +991,12 @@ function Bookmakers({
           selected.id,
           Number(actionAmount).toFixed(2),
           actionReason || undefined,
+        );
+      else if (action === "bonus")
+        await bookmakersApi.freeWinning(
+          selected.id,
+          Number(actionAmount).toFixed(2),
+          actionReason,
         );
       else
         await bookmakersApi.adjust(
@@ -1190,6 +1198,9 @@ function Bookmakers({
                           </button>
                           <button onClick={() => openAction(b, "adjust")}>
                             Ajustar saldo
+                          </button>
+                          <button onClick={() => openAction(b, "bonus")}>
+                            Adicionar ganho grátis
                           </button>
                         </>
                       )}
@@ -1451,6 +1462,7 @@ function Bookmakers({
               )}
               {visibleTransactions.map((item) => {
                 const counterparty = transferCounterparty(item, bookmakers);
+                const reason = transactionReason(item);
                 return (
                   <div className="statement-row" key={item.id}>
                     <div>
@@ -1461,6 +1473,9 @@ function Bookmakers({
                             ? `Recebida de ${counterparty}`
                             : `Enviada para ${counterparty}`}
                         </span>
+                      )}
+                      {reason && (
+                        <span className="statement-counterparty">{reason}</span>
                       )}
                       <small>
                         {new Date(item.occurredAt).toLocaleString("pt-BR")}
@@ -1534,14 +1549,23 @@ function Bookmakers({
                   label={
                     action === "adjust"
                       ? "Motivo obrigatório"
-                      : "Descrição opcional"
+                      : action === "bonus"
+                        ? "Origem do ganho"
+                        : "Descrição opcional"
                   }
                 >
                   <input
-                    required={action === "adjust"}
-                    minLength={action === "adjust" ? 3 : undefined}
+                    required={action === "adjust" || action === "bonus"}
+                    minLength={
+                      action === "adjust" || action === "bonus" ? 3 : undefined
+                    }
                     value={actionReason}
                     onChange={(event) => setActionReason(event.target.value)}
+                    placeholder={
+                      action === "bonus"
+                        ? "Ex.: 40 giros grátis no jogo X"
+                        : undefined
+                    }
                   />
                 </Field>
               </>
@@ -1578,7 +1602,7 @@ const transactionLabels: Record<string, string> = {
   BET_STAKE: "Valor apostado",
   BET_RETURN: "Retorno da aposta",
   BET_REFUND: "Estorno da aposta",
-  BONUS_RECEIVED: "Crédito recebido",
+  BONUS_RECEIVED: "Ganho grátis",
   BONUS_USED: "Crédito utilizado",
   ADJUSTMENT: "Ajuste manual",
 };
@@ -1597,6 +1621,7 @@ type StatementTab =
   | "withdrawals"
   | "deposits"
   | "winnings"
+  | "free-winnings"
   | "refunds"
   | "transfers";
 
@@ -1605,6 +1630,7 @@ const statementTabs: { id: StatementTab; label: string }[] = [
   { id: "withdrawals", label: "Saques" },
   { id: "deposits", label: "Depósitos" },
   { id: "winnings", label: "Ganhos das bets" },
+  { id: "free-winnings", label: "Ganhos grátis" },
   { id: "refunds", label: "Dinheiro retornado" },
   { id: "transfers", label: "Transferências" },
 ];
@@ -1614,6 +1640,7 @@ const statementTabTypes: Record<StatementTab, string[]> = {
   withdrawals: ["WITHDRAWAL"],
   deposits: ["INITIAL_BALANCE", "DEPOSIT"],
   winnings: ["BET_RETURN"],
+  "free-winnings": ["BONUS_RECEIVED"],
   refunds: ["BET_REFUND"],
   transfers: ["TRANSFER_IN", "TRANSFER_OUT"],
 };
@@ -1628,6 +1655,7 @@ const statementEmptyMessages: Record<StatementTab, string> = {
   withdrawals: "Os saques realizados nesta casa aparecerão aqui.",
   deposits: "Os depósitos e o saldo inicial aparecerão aqui.",
   winnings: "Os valores recebidos pelas bets ganhadoras aparecerão aqui.",
+  "free-winnings": "Prêmios, giros e outros ganhos gratuitos aparecerão aqui.",
   refunds: "Valores devolvidos por exclusões ou cancelamentos aparecerão aqui.",
   transfers: "Transferências recebidas e enviadas aparecerão aqui.",
 };
@@ -1652,12 +1680,25 @@ const transferCounterparty = (
     bookmakers.find((bookmaker) => bookmaker.id === id)?.name ?? "outra casa"
   );
 };
+const transactionReason = (transaction: ApiWalletTransaction) => {
+  if (
+    !transaction.metadata ||
+    typeof transaction.metadata !== "object" ||
+    Array.isArray(transaction.metadata)
+  )
+    return undefined;
+  const reason = (transaction.metadata as Record<string, unknown>)["reason"];
+  return typeof reason === "string" ? reason : undefined;
+};
 
-const actionTitle = (action: "deposit" | "withdraw" | "adjust" | "edit") =>
+const actionTitle = (
+  action: "deposit" | "withdraw" | "adjust" | "bonus" | "edit",
+) =>
   ({
     deposit: "Depositar",
     withdraw: "Sacar",
     adjust: "Ajustar saldo",
+    bonus: "Adicionar ganho grátis",
     edit: "Editar",
   })[action];
 

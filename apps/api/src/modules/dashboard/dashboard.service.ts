@@ -12,6 +12,7 @@ interface SummaryRow {
   credit_source_loss: Prisma.Decimal;
   credit_conversion_profit: Prisma.Decimal;
   contributed_capital: Prisma.Decimal;
+  free_winnings: Prisma.Decimal;
 }
 interface DailyRow {
   day: string;
@@ -50,9 +51,9 @@ export class DashboardService {
             FROM "bet_credits" credit
             JOIN "operations" source ON source."id" = credit."source_operation_id"
             WHERE credit."user_id" = ${userId}::uuid
-              AND credit."status" = 'CONSUMED'
+              AND credit."status" IN ('AVAILABLE', 'CONSUMED')
               AND source."realized_profit" < 0
-              AND to_char(source."settled_at" AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') = ${month}
+              AND to_char(COALESCE(source."settled_at", source."updated_at") AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') = ${month}
           ), 0)::numeric AS credit_source_loss,
           COALESCE((
             SELECT SUM(consumer."realized_profit")
@@ -62,8 +63,11 @@ export class DashboardService {
               AND to_char(consumer."settled_at" AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') = ${month}
               AND EXISTS (
                 SELECT 1 FROM "bet_credits" consumed_credit
+                JOIN "operations" credit_source
+                  ON credit_source."id" = consumed_credit."source_operation_id"
                 WHERE consumed_credit."consumer_operation_id" = consumer."id"
                   AND consumed_credit."status" = 'CONSUMED'
+                  AND credit_source."realized_profit" < 0
               )
           ), 0)::numeric AS credit_conversion_profit,
           COALESCE((
@@ -71,29 +75,51 @@ export class DashboardService {
             FROM "wallet_transactions" contribution
             WHERE contribution."user_id" = ${userId}::uuid
               AND contribution."type" IN ('INITIAL_BALANCE', 'DEPOSIT')
-          ), 0)::numeric AS contributed_capital
+          ), 0)::numeric AS contributed_capital,
+          COALESCE((
+            SELECT SUM(free_winning."amount")
+            FROM "wallet_transactions" free_winning
+            WHERE free_winning."user_id" = ${userId}::uuid
+              AND free_winning."type" = 'BONUS_RECEIVED'
+              AND to_char(free_winning."occurred_at" AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') = ${month}
+          ), 0)::numeric AS free_winnings
         FROM "operations" o
         LEFT JOIN "bet_credits" c ON c."source_operation_id" = o."id"
         WHERE o."user_id" = ${userId}::uuid AND o."status" = 'SETTLED'
           AND to_char(o."settled_at" AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') = ${month}
       `),
       this.prisma.$queryRaw<DailyRow[]>(Prisma.sql`
-        SELECT to_char("settled_at" AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS day,
-          COALESCE(SUM("realized_profit"), 0)::numeric AS result
-        FROM "operations"
-        WHERE "user_id" = ${userId}::uuid AND "status" = 'SETTLED'
-          AND to_char("settled_at" AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') = ${month}
-        GROUP BY 1 ORDER BY 1
+        SELECT movement.day, COALESCE(SUM(movement.result), 0)::numeric AS result
+        FROM (
+          SELECT to_char("settled_at" AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS day,
+            "realized_profit"::numeric AS result
+          FROM "operations"
+          WHERE "user_id" = ${userId}::uuid AND "status" = 'SETTLED'
+            AND to_char("settled_at" AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') = ${month}
+          UNION ALL
+          SELECT to_char("occurred_at" AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS day,
+            "amount"::numeric AS result
+          FROM "wallet_transactions"
+          WHERE "user_id" = ${userId}::uuid AND "type" = 'BONUS_RECEIVED'
+            AND to_char("occurred_at" AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') = ${month}
+        ) movement
+        GROUP BY movement.day ORDER BY movement.day
       `),
       this.prisma.$queryRaw<BalanceRow[]>(Prisma.sql`
         SELECT a."id", COALESCE(a."nickname", a."name") AS name,
           a."cached_balance" AS available,
           COALESCE((SELECT SUM(l."stake") FROM "bet_legs" l JOIN "operations" o ON o."id" = l."operation_id"
             WHERE l."bookmaker_account_id" = a."id" AND o."status" = 'OPEN' AND l."uses_bet_credit" = false), 0)::numeric AS open_stake,
-          COALESCE((SELECT SUM(w."amount") FROM "wallet_transactions" w JOIN "operations" o ON o."id" = w."operation_id"
-            WHERE w."bookmaker_account_id" = a."id" AND o."status" = 'SETTLED'
-              AND to_char(o."settled_at" AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') = ${month}
-              AND w."type" IN ('BET_STAKE', 'BET_REFUND', 'BET_RETURN')), 0)::numeric AS monthly_result
+          COALESCE((SELECT SUM(w."amount") FROM "wallet_transactions" w
+            WHERE w."bookmaker_account_id" = a."id" AND (
+              (w."type" = 'BONUS_RECEIVED'
+                AND to_char(w."occurred_at" AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') = ${month})
+              OR (w."type" IN ('BET_STAKE', 'BET_REFUND', 'BET_RETURN') AND EXISTS (
+                SELECT 1 FROM "operations" settled_operation
+                WHERE settled_operation."id" = w."operation_id" AND settled_operation."status" = 'SETTLED'
+                  AND to_char(settled_operation."settled_at" AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') = ${month}
+              ))
+            )), 0)::numeric AS monthly_result
         FROM "bookmaker_accounts" a WHERE a."user_id" = ${userId}::uuid ORDER BY name
       `),
       this.prisma.operation.findMany({
@@ -122,7 +148,10 @@ export class DashboardService {
       credit_source_loss: new Prisma.Decimal(0),
       credit_conversion_profit: new Prisma.Decimal(0),
       contributed_capital: new Prisma.Decimal(0),
+      free_winnings: new Prisma.Decimal(0),
     };
+    const realizedProfit = summary.profit.add(summary.free_winnings);
+    const netResult = summary.net.add(summary.free_winnings);
     const daily = new Map(dailyRows.map((row) => [row.day, row.result]));
     let accumulated = new Prisma.Decimal(0);
     const dailyEvolution = this.daysOfMonth(month).map((date) => {
@@ -146,14 +175,15 @@ export class DashboardService {
       month,
       timezone: "America/Sao_Paulo",
       metrics: {
-        realizedProfit: summary.profit.toFixed(2),
+        realizedProfit: realizedProfit.toFixed(2),
         realizedLoss: summary.definitive_loss.toFixed(2),
         creditGeneratingLoss: summary.credit_source_loss.toFixed(2),
         creditConversionProfit: summary.credit_conversion_profit.toFixed(2),
-        netResult: summary.net.toFixed(2),
+        netResult: netResult.toFixed(2),
         roiPercent: summary.contributed_capital.isZero()
           ? "0"
-          : summary.net.div(summary.contributed_capital).mul(100).toFixed(6),
+          : netResult.div(summary.contributed_capital).mul(100).toFixed(6),
+        freeWinnings: summary.free_winnings.toFixed(2),
         contributedCapital: summary.contributed_capital.toFixed(2),
         realCashInvestmentSettled: summary.investment.toFixed(2),
         settledOperations: Number(summary.settled),

@@ -144,9 +144,9 @@ Pendências deliberadas:
 Status: implementada e validada sem banco externo.
 
 - `GET /dashboard/monthly?month=YYYY-MM` agrega diretamente no PostgreSQL e sempre filtra pelo usuário autenticado.
-- Métricas incluem ganhos, perdas, resultado líquido, investimento encerrado, ROI, quantidade encerrada, stake aberta, saldo disponível e patrimônio.
+- Métricas incluem ganhos, perdas definitivas, perdas qualificadoras, lucro convertido de créditos, ganhos grátis, resultado líquido, rentabilidade sobre aportes, quantidade encerrada, stake aberta, saldo disponível e patrimônio.
 - O mês usa `settledAt` na timezone `America/Sao_Paulo`; `WAITING_CREDIT_USE` não entra no resultado.
-- Série diária retorna todos os dias do mês, inclusive dias zerados, com resultado e acumulado.
+- Série diária retorna todos os dias do mês, inclusive dias zerados, somando resultados das bets e ganhos grátis no resultado e acumulado.
 - Resumo por casa inclui disponível, aberto, patrimônio e resultado mensal derivado do ledger.
 - Operações recentes e valores decimais serializados como strings fazem parte da resposta.
 - Comparação com o mês anterior permanece `null` nesta primeira versão, como permitido pela spec quando não há base comparável.

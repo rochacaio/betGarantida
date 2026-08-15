@@ -10,6 +10,7 @@ export type DashboardData = {
     netResult: string;
     roiPercent: string;
     contributedCapital: string;
+    freeWinnings: string;
     settledOperations: number;
     openStake: string;
     availableBalance: string;

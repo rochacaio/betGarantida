@@ -17,12 +17,13 @@ describe("DashboardService", () => {
           credit_source_loss: new Prisma.Decimal(2),
           credit_conversion_profit: new Prisma.Decimal(8),
           contributed_capital: new Prisma.Decimal(300),
+          free_winnings: new Prisma.Decimal(3),
         },
       ])
       .mockResolvedValueOnce([
         {
           day: "2026-08-02",
-          result: new Prisma.Decimal(15),
+          result: new Prisma.Decimal(18),
         },
       ])
       .mockResolvedValueOnce([
@@ -56,13 +57,14 @@ describe("DashboardService", () => {
       "2026-08",
     );
     expect(result.metrics).toMatchObject({
-      realizedProfit: "20.00",
+      realizedProfit: "23.00",
       realizedLoss: "3.00",
       creditGeneratingLoss: "2.00",
       creditConversionProfit: "8.00",
-      netResult: "15.00",
-      roiPercent: "5.000000",
+      netResult: "18.00",
+      roiPercent: "6.000000",
       contributedCapital: "300.00",
+      freeWinnings: "3.00",
       equity: "230.00",
     });
     expect(result.dailyEvolution).toHaveLength(31);
@@ -71,8 +73,8 @@ describe("DashboardService", () => {
       accumulated: "0.00",
     });
     expect(result.dailyEvolution[1]).toMatchObject({
-      result: "15.00",
-      accumulated: "15.00",
+      result: "18.00",
+      accumulated: "18.00",
     });
   });
 });

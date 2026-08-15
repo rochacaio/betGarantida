@@ -45,6 +45,12 @@ export const bookmakersApi = {
       headers: commandHeaders(),
       body: JSON.stringify({ amount, description }),
     }),
+  freeWinning: (id: string, amount: string, description?: string) =>
+    api(`/bookmaker-accounts/${id}/free-winnings`, {
+      method: "POST",
+      headers: commandHeaders(),
+      body: JSON.stringify({ amount, description }),
+    }),
   withdraw: (id: string, amount: string, description?: string) =>
     api(`/bookmaker-accounts/${id}/withdrawals`, {
       method: "POST",

@@ -30,6 +30,7 @@ GET  /bookmaker-accounts/:id
 PATCH /bookmaker-accounts/:id
 GET  /bookmaker-accounts/:id/transactions
 POST /bookmaker-accounts/:id/deposits
+POST /bookmaker-accounts/:id/free-winnings
 POST /bookmaker-accounts/:id/withdrawals
 POST /bookmaker-accounts/:id/adjustments
 POST /bookmaker-accounts/transfers

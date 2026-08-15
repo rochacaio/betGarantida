@@ -95,6 +95,22 @@ export class BookmakerAccountsController {
     });
   }
 
+  @Post(":id/free-winnings")
+  freeWinning(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: AmountDto,
+    @Headers("idempotency-key") idempotencyKey = "",
+  ) {
+    return this.wallets.freeWinning({
+      userId: user.id,
+      bookmakerAccountId: id,
+      amount: dto.amount,
+      description: dto.description,
+      idempotencyKey,
+    });
+  }
+
   @Post(":id/withdrawals")
   withdraw(
     @CurrentUser() user: AuthenticatedUser,
