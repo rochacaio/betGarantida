@@ -78,7 +78,10 @@ test("manual stakes are preserved and only scenario results change", () => {
   ]);
   assert.equal(fixed(balanced[1].stake), "120.00");
   const snapshot = calculateOperationSnapshot(balanced);
-  assert.notEqual(fixed(snapshot.legs[0].scenarioResult), fixed(snapshot.legs[1].scenarioResult));
+  assert.notEqual(
+    fixed(snapshot.legs[0].scenarioResult),
+    fixed(snapshot.legs[1].scenarioResult),
+  );
 });
 
 test("cashback em dinheiro entra somente quando a linha perde", () => {
@@ -138,7 +141,11 @@ test("liquidação soma múltiplas linhas vencedoras", () => {
 });
 
 test("README: conversão de freebet equilibra pelo profitFactor", () => {
-  const conversion = convertFreebet({ freebet: "100", freebetOdd: "3", hedgeOdd: "2" });
+  const conversion = convertFreebet({
+    freebet: "100",
+    freebetOdd: "3",
+    hedgeOdd: "2",
+  });
   assert.equal(fixed(conversion.hedgeStake), "100.00");
   assert.equal(fixed(conversion.resultFreebetWins), "100.00");
   assert.equal(fixed(conversion.resultHedgeWins), "100.00");
@@ -158,7 +165,10 @@ test("otimizador escolhe os centavos com melhor pior cenário", () => {
   const best = optimizeStake({
     theoreticalStake: "10.034",
     radiusInCents: 3,
-    calculateScenarios: (stake) => [stake.minus("10"), new stake.constructor("10.05").minus(stake)],
+    calculateScenarios: (stake) => [
+      stake.minus("10"),
+      new stake.constructor("10.05").minus(stake),
+    ],
   });
   // 10.02 and 10.03 tie at two cents; deterministic tie-breaking keeps the lower stake.
   assert.equal(fixed(best.stake), "10.02");
@@ -181,11 +191,27 @@ test("valida stake, odd, comissão, aumento e cashback", () => {
   }
 });
 
+test("aceita comissão percentual decimal", () => {
+  const leg = prepareBetLeg({
+    stake: "100",
+    odd: "2",
+    commissionPercent: "2.5",
+  });
+  assert.equal(leg.commissionPercent.toString(), "2.5");
+  assert.equal(leg.effectiveOdd.toFixed(6), "1.975000");
+});
+
 test("liquidação exige exatamente um resultado por linha e ao menos um green", () => {
   const inputs = [
     { stake: "10", odd: "2" },
     { stake: "10", odd: "2" },
   ];
-  assert.throws(() => calculateSettlement(inputs, ["WON"]), CalculationValidationError);
-  assert.throws(() => calculateSettlement(inputs, ["LOST", "LOST"]), CalculationValidationError);
+  assert.throws(
+    () => calculateSettlement(inputs, ["WON"]),
+    CalculationValidationError,
+  );
+  assert.throws(
+    () => calculateSettlement(inputs, ["LOST", "LOST"]),
+    CalculationValidationError,
+  );
 });

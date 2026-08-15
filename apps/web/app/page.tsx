@@ -1904,7 +1904,9 @@ function LegRow({
             <input
               type="number"
               min="0"
-              max="99"
+              max="99.999999"
+              step="0.01"
+              inputMode="decimal"
               value={leg.commission}
               onChange={(e) => update({ commission: Number(e.target.value) })}
             />
@@ -1916,6 +1918,9 @@ function LegRow({
             <input
               type="number"
               min="0"
+              max="100"
+              step="0.01"
+              inputMode="decimal"
               value={leg.cashback}
               onChange={(e) => update({ cashback: Number(e.target.value) })}
             />
@@ -1927,6 +1932,8 @@ function LegRow({
             <input
               type="number"
               min="0"
+              step="0.01"
+              inputMode="decimal"
               value={leg.increase}
               onChange={(e) => update({ increase: Number(e.target.value) })}
             />
