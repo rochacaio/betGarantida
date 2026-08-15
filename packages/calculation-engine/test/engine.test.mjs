@@ -201,6 +201,29 @@ test("aceita comissão percentual decimal", () => {
   assert.equal(leg.effectiveOdd.toFixed(6), "1.975000");
 });
 
+test("Lay calcula responsabilidade, lucro líquido e odd Back equivalente", () => {
+  const leg = prepareBetLeg({
+    betType: "LAY",
+    stake: "25.74",
+    odd: "7.6",
+    commissionPercent: "2.5",
+  });
+  assert.equal(fixed(leg.riskAmount), "169.88");
+  assert.equal(fixed(leg.projectedPayout), "194.98");
+  assert.equal(leg.effectiveOdd.toFixed(3), "1.148");
+});
+
+test("balanceia uma linha Lay usando a responsabilidade como risco real", () => {
+  const balanced = balanceStakes([
+    { stake: "100", odd: "2", betType: "BACK" },
+    { odd: "7.6", commissionPercent: "2.5", betType: "LAY" },
+  ]);
+  const snapshot = calculateOperationSnapshot(balanced);
+  assert.equal(balanced[1].stake.toString(), "26.4");
+  assert.equal(fixed(snapshot.legs[1].riskAmount), "174.24");
+  assert.equal(fixed(snapshot.realCashInvestment), "274.24");
+});
+
 test("liquidação exige exatamente um resultado por linha e ao menos um green", () => {
   const inputs = [
     { stake: "10", odd: "2" },

@@ -571,6 +571,11 @@ td:first-child small {
   border-color: #255d42;
   background: #102b1e;
 }
+.credit-badge.lay {
+  color: #ffd15a;
+  border-color: #766020;
+  background: #30270e;
+}
 .avatar-stack {
   display: flex;
 }
@@ -1120,11 +1125,22 @@ td:first-child small {
 .leg-row {
   position: relative;
   display: grid;
-  grid-template-columns: 28px 1.45fr 0.9fr 0.7fr 0.75fr 0.75fr 0.75fr 0.8fr;
+  grid-template-columns: 28px 1.35fr 0.85fr 0.7fr 0.65fr 0.7fr 0.7fr 0.7fr 0.8fr;
   gap: 10px;
   align-items: end;
   padding: 20px 0 26px;
   border-bottom: 1px solid #203a2b;
+}
+.leg-derived {
+  display: block;
+  margin-top: 5px;
+  color: #91a99a;
+  font-size: 8px;
+  white-space: nowrap;
+}
+.lay-credit-note {
+  color: #d8b94e;
+  font-size: 9px;
 }
 .leg-number {
   width: 25px;
@@ -1854,7 +1870,7 @@ td:first-child small {
   padding: 22px 28px 40px;
 }
 .embedded-editor .leg-row {
-  grid-template-columns: 28px 1.35fr 0.85fr 0.65fr 0.7fr 0.7fr 0.7fr 0.75fr;
+  grid-template-columns: 28px 1.25fr 0.8fr 0.65fr 0.6fr 0.65fr 0.65fr 0.65fr 0.75fr;
 }
 @media (max-width: 780px) {
   .credit-generator {

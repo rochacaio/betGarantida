@@ -9,51 +9,76 @@ import {
   SettlementSnapshot,
 } from "./types";
 
-export const CALCULATION_ENGINE_VERSION = "1.0.0" as const;
+export const CALCULATION_ENGINE_VERSION = "1.1.0" as const;
 export const ROUNDING_POLICY = "HALF_UP_2_DECIMALS_RECALCULATE" as const;
 
 export function balanceStakes(inputs: BalanceLegInput[]): BetLegInput[] {
   if (inputs.length < 2) {
-    throw new CalculationValidationError("A operação precisa de pelo menos duas linhas.", "legs");
+    throw new CalculationValidationError(
+      "A operação precisa de pelo menos duas linhas.",
+      "legs",
+    );
   }
   const anchor = inputs[0];
   if (anchor?.stake === undefined) {
-    throw new CalculationValidationError("A primeira stake é obrigatória.", "legs.0.stake");
+    throw new CalculationValidationError(
+      "A primeira stake é obrigatória.",
+      "legs.0.stake",
+    );
   }
-  const preparedAnchor = prepareBetLeg({ ...anchor, stake: anchor.stake }, "legs.0");
+  const preparedAnchor = prepareBetLeg(
+    { ...anchor, stake: anchor.stake },
+    "legs.0",
+  );
   const anchorBalanceFactor = preparedAnchor.payoutMultiplier.minus(
     preparedAnchor.cashbackPercent.div(100),
   );
-  const targetBalance = preparedAnchor.stake.mul(anchorBalanceFactor);
+  const targetBalance = preparedAnchor.riskAmount.mul(anchorBalanceFactor);
 
   return inputs.map((input, index) => {
     if (index === 0 || (input.manualStake && input.stake !== undefined)) {
       if (input.stake === undefined) {
-        throw new CalculationValidationError("Stake manual é obrigatória.", `legs.${index}.stake`);
+        throw new CalculationValidationError(
+          "Stake manual é obrigatória.",
+          `legs.${index}.stake`,
+        );
       }
       return { ...input, stake: roundMoney(input.stake) };
     }
     const unitLeg = prepareBetLeg({ ...input, stake: 1 }, `legs.${index}`);
-    const balanceFactor = unitLeg.payoutMultiplier.minus(unitLeg.cashbackPercent.div(100));
+    const balanceFactor = unitLeg.payoutMultiplier.minus(
+      unitLeg.cashbackPercent.div(100),
+    );
     if (balanceFactor.lte(0)) {
       throw new CalculationValidationError(
         "Não é possível balancear esta combinação de payout e cashback.",
         `legs.${index}`,
       );
     }
-    return { ...input, stake: roundMoney(targetBalance.div(balanceFactor)) };
+    const stakePerUnit = unitLeg.riskAmount.mul(balanceFactor);
+    return { ...input, stake: roundMoney(targetBalance.div(stakePerUnit)) };
   });
 }
 
-export function calculateOperationSnapshot(inputs: BetLegInput[]): OperationSnapshot {
+export function calculateOperationSnapshot(
+  inputs: BetLegInput[],
+): OperationSnapshot {
   if (inputs.length < 2) {
-    throw new CalculationValidationError("A operação precisa de pelo menos duas linhas.", "legs");
+    throw new CalculationValidationError(
+      "A operação precisa de pelo menos duas linhas.",
+      "legs",
+    );
   }
-  const roundedInputs = inputs.map((input) => ({ ...input, stake: roundMoney(input.stake) }));
-  const prepared = roundedInputs.map((input, index) => prepareBetLeg(input, `legs.${index}`));
+  const roundedInputs = inputs.map((input) => ({
+    ...input,
+    stake: roundMoney(input.stake),
+  }));
+  const prepared = roundedInputs.map((input, index) =>
+    prepareBetLeg(input, `legs.${index}`),
+  );
   const realCashInvestment = roundMoney(
     prepared.reduce(
-      (total, leg) => total.plus(leg.usesBetCredit ? 0 : leg.stake),
+      (total, leg) => total.plus(leg.usesBetCredit ? 0 : leg.riskAmount),
       new Decimal(0),
     ),
   );
@@ -66,11 +91,15 @@ export function calculateOperationSnapshot(inputs: BetLegInput[]): OperationSnap
   const scenarioReturns = prepared.map((winningLeg, winningIndex) => {
     const cashback = prepared.reduce((total, losingLeg, losingIndex) => {
       if (losingIndex === winningIndex) return total;
-      return total.plus(losingLeg.stake.mul(losingLeg.cashbackPercent.div(100)));
+      return total.plus(
+        losingLeg.stake.mul(losingLeg.cashbackPercent.div(100)),
+      );
     }, new Decimal(0));
     return roundMoney(winningLeg.projectedPayout.plus(cashback));
   });
-  const scenarioResults = scenarioReturns.map((value) => roundMoney(value.minus(realCashInvestment)));
+  const scenarioResults = scenarioReturns.map((value) =>
+    roundMoney(value.minus(realCashInvestment)),
+  );
   const protectedReturn = Decimal.min(...scenarioReturns);
   const projectedProfit = roundMoney(protectedReturn.minus(realCashInvestment));
   const projectedRoiPercent = realCashInvestment.isZero()
@@ -82,7 +111,10 @@ export function calculateOperationSnapshot(inputs: BetLegInput[]): OperationSnap
   );
 
   return {
-    legs: prepared.map((leg, index) => ({ ...leg, scenarioResult: scenarioResults[index]! })),
+    legs: prepared.map((leg, index) => ({
+      ...leg,
+      scenarioResult: scenarioResults[index]!,
+    })),
     realCashInvestment,
     promotionalStake,
     protectedReturn,
@@ -100,15 +132,22 @@ export function calculateSettlement(
   results: SettlementResult[],
 ): SettlementSnapshot {
   if (inputs.length !== results.length) {
-    throw new CalculationValidationError("Cada linha precisa de um resultado.", "results");
+    throw new CalculationValidationError(
+      "Cada linha precisa de um resultado.",
+      "results",
+    );
   }
   if (!results.includes("WON")) {
-    throw new CalculationValidationError("Ao menos uma linha precisa ser vencedora.", "results");
+    throw new CalculationValidationError(
+      "Ao menos uma linha precisa ser vencedora.",
+      "results",
+    );
   }
   const snapshot = calculateOperationSnapshot(inputs);
   const winningPayout = roundMoney(
     snapshot.legs.reduce(
-      (total, leg, index) => total.plus(results[index] === "WON" ? leg.projectedPayout : 0),
+      (total, leg, index) =>
+        total.plus(results[index] === "WON" ? leg.projectedPayout : 0),
       new Decimal(0),
     ),
   );
@@ -116,13 +155,17 @@ export function calculateSettlement(
     snapshot.legs.reduce(
       (total, leg, index) =>
         total.plus(
-          results[index] === "LOST" ? leg.stake.mul(leg.cashbackPercent.div(100)) : 0,
+          results[index] === "LOST"
+            ? leg.stake.mul(leg.cashbackPercent.div(100))
+            : 0,
         ),
       new Decimal(0),
     ),
   );
   const realizedReturn = roundMoney(winningPayout.plus(cashbackReturn));
-  const realizedProfit = roundMoney(realizedReturn.minus(snapshot.realCashInvestment));
+  const realizedProfit = roundMoney(
+    realizedReturn.minus(snapshot.realCashInvestment),
+  );
   const realizedRoiPercent = snapshot.realCashInvestment.isZero()
     ? new Decimal(0)
     : realizedProfit.div(snapshot.realCashInvestment).mul(100);
@@ -148,10 +191,13 @@ export function optimizeStake(input: {
     if (cents.isNegative()) continue;
     const stake = cents.div(100);
     const scenarios = input.calculateScenarios(stake);
-    if (!scenarios.length) throw new CalculationValidationError("Cenários são obrigatórios.");
+    if (!scenarios.length)
+      throw new CalculationValidationError("Cenários são obrigatórios.");
     const guaranteedResult = Decimal.min(...scenarios);
-    if (!best || guaranteedResult.gt(best.guaranteedResult)) best = { stake, guaranteedResult };
+    if (!best || guaranteedResult.gt(best.guaranteedResult))
+      best = { stake, guaranteedResult };
   }
-  if (!best) throw new CalculationValidationError("Não foi possível otimizar a stake.");
+  if (!best)
+    throw new CalculationValidationError("Não foi possível otimizar a stake.");
   return best;
 }

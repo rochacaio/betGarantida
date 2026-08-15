@@ -26,6 +26,7 @@ export type OperationStatus =
   | "SETTLED"
   | "CANCELLED";
 export type BetLegResult = "PENDING" | "WON" | "LOST";
+export type BetType = "BACK" | "LAY";
 export type BetCreditStatus =
   | "EXPECTED"
   | "AVAILABLE"
@@ -36,6 +37,7 @@ export type BetCreditStatus =
 
 export interface OperationLegInput {
   bookmakerAccountId: string;
+  betType?: BetType;
   stake: string;
   odd: string;
   commissionPercent?: string;

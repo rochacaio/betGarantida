@@ -39,7 +39,9 @@ type Bookmaker = {
 type Leg = {
   id: string;
   bookmakerId: string;
+  betType: "BACK" | "LAY";
   stake: number | "";
+  riskAmount?: number;
   odd: number | "";
   commission: number;
   cashback: number;
@@ -123,7 +125,9 @@ const mapOperation = (item: ApiOperation): Surebet => ({
   legs: item.legs.map((leg) => ({
     id: leg.id,
     bookmakerId: leg.bookmakerAccountId,
+    betType: leg.betType ?? "BACK",
     stake: Number(leg.stake),
+    riskAmount: Number(leg.riskAmount),
     odd: Number(leg.odd),
     commission: Number(leg.commissionPercent),
     cashback: Number(leg.cashbackPercent),
@@ -788,8 +792,12 @@ function SurebetTable({
                     {s.title} · {s.date}
                   </small>
                   {(s.generatesBetCredit ||
-                    s.legs.some((leg) => leg.usesBetCredit)) && (
+                    s.legs.some((leg) => leg.usesBetCredit) ||
+                    s.legs.some((leg) => leg.betType === "LAY")) && (
                     <div className="credit-badges">
+                      {s.legs.some((leg) => leg.betType === "LAY") && (
+                        <span className="credit-badge lay">Lay</span>
+                      )}
                       {s.generatesBetCredit && (
                         <span className="credit-badge generated">
                           {s.creditGenerated
@@ -821,7 +829,15 @@ function SurebetTable({
                 </td>
                 <td>
                   {money.format(
-                    s.legs.reduce((a, l) => a + Number(l.stake || 0), 0),
+                    s.legs.reduce(
+                      (total, leg) =>
+                        total +
+                        (leg.riskAmount ??
+                          (leg.betType === "LAY" && leg.odd !== ""
+                            ? Number(leg.stake || 0) * (leg.odd - 1)
+                            : Number(leg.stake || 0))),
+                      0,
+                    ),
                   )}
                 </td>
                 <td
@@ -1608,11 +1624,23 @@ const transactionLabels: Record<string, string> = {
 };
 const transactionLabel = (transaction: ApiWalletTransaction) => {
   if (transaction.activity === "BET_EDIT_REFUND")
-    return "Saldo devolvido para edição";
+    return transaction.betType === "LAY"
+      ? "Responsabilidade devolvida para edição"
+      : "Saldo devolvido para edição";
   if (transaction.activity === "BET_EDIT_STAKE")
-    return "Valor reaplicado após edição";
+    return transaction.betType === "LAY"
+      ? "Responsabilidade reaplicada após edição"
+      : "Valor reaplicado após edição";
   if (transaction.activity === "BET_CANCEL_REFUND")
-    return "Estorno por exclusão da aposta";
+    return transaction.betType === "LAY"
+      ? "Responsabilidade estornada por exclusão"
+      : "Estorno por exclusão da aposta";
+  if (transaction.betType === "LAY") {
+    if (transaction.type === "BET_STAKE") return "Responsabilidade Lay";
+    if (transaction.type === "BET_RETURN") return "Retorno do Lay";
+    if (transaction.type === "BET_REFUND")
+      return "Estorno da responsabilidade Lay";
+  }
   return transactionLabels[transaction.type] ?? transaction.type;
 };
 
@@ -1844,6 +1872,14 @@ function LegRow({
   remove: () => void;
 }) {
   const b = bookmakers.find((x) => x.id === leg.bookmakerId);
+  const layLiability =
+    leg.betType === "LAY" && leg.stake !== "" && leg.odd !== ""
+      ? Number(leg.stake) * (Number(leg.odd) - 1)
+      : 0;
+  const layEquivalentOdd =
+    layLiability > 0
+      ? 1 + (Number(leg.stake) * (1 - leg.commission / 100)) / layLiability
+      : 0;
   return (
     <div className="leg-row-wrap">
       <div className="leg-row">
@@ -1863,7 +1899,7 @@ function LegRow({
               ))}
           </select>
         </Field>
-        <Field label="Valor">
+        <Field label={leg.betType === "LAY" ? "Valor Lay" : "Valor"}>
           <div className="money-input compact">
             <span>R$</span>
             <input
@@ -1883,6 +1919,11 @@ function LegRow({
               }
             />
           </div>
+          {leg.betType === "LAY" && (
+            <small className="leg-derived">
+              Responsabilidade: {money.format(layLiability)}
+            </small>
+          )}
         </Field>
         <Field label="ODD">
           <input
@@ -1898,6 +1939,34 @@ function LegRow({
               })
             }
           />
+          {leg.betType === "LAY" && layEquivalentOdd > 0 && (
+            <small className="leg-derived">
+              A favor: {layEquivalentOdd.toFixed(3)}
+            </small>
+          )}
+        </Field>
+        <Field label="Tipo">
+          <select
+            value={leg.betType}
+            onChange={(event) => {
+              const betType = event.target.value as "BACK" | "LAY";
+              update({
+                betType,
+                ...(betType === "LAY"
+                  ? {
+                      cashback: 0,
+                      increase: 0,
+                      usesBetCredit: false,
+                      usesFreeBetCredit: false,
+                      creditSourceSurebetId: undefined,
+                    }
+                  : {}),
+              });
+            }}
+          >
+            <option value="BACK">Back</option>
+            <option value="LAY">Lay</option>
+          </select>
         </Field>
         <Field label="Comissão">
           <div className="percent-input">
@@ -1922,6 +1991,7 @@ function LegRow({
               step="0.01"
               inputMode="decimal"
               value={leg.cashback}
+              disabled={leg.betType === "LAY"}
               onChange={(e) => update({ cashback: Number(e.target.value) })}
             />
             <span>%</span>
@@ -1935,6 +2005,7 @@ function LegRow({
               step="0.01"
               inputMode="decimal"
               value={leg.increase}
+              disabled={leg.betType === "LAY"}
               onChange={(e) => update({ increase: Number(e.target.value) })}
             />
             <span>%</span>
@@ -1964,19 +2035,25 @@ function LegRow({
         )}
       </div>
       <div className="leg-credit">
-        <Toggle
-          label="Usar crédito de aposta nesta entrada"
-          checked={!!leg.usesBetCredit}
-          onChange={(value) =>
-            update({
-              usesBetCredit: value,
-              usesFreeBetCredit: value ? leg.usesFreeBetCredit : false,
-              creditSourceSurebetId: value
-                ? leg.creditSourceSurebetId
-                : undefined,
-            })
-          }
-        />
+        {leg.betType === "BACK" ? (
+          <Toggle
+            label="Usar crédito de aposta nesta entrada"
+            checked={!!leg.usesBetCredit}
+            onChange={(value) =>
+              update({
+                usesBetCredit: value,
+                usesFreeBetCredit: value ? leg.usesFreeBetCredit : false,
+                creditSourceSurebetId: value
+                  ? leg.creditSourceSurebetId
+                  : undefined,
+              })
+            }
+          />
+        ) : (
+          <span className="lay-credit-note">
+            No Lay, o saldo reservado é a responsabilidade.
+          </span>
+        )}
         {leg.usesBetCredit && (
           <Field label="Crédito gerado pela surebet">
             <select
@@ -2072,6 +2149,7 @@ function Editor({
           {
             id: uid(),
             bookmakerId: "",
+            betType: "BACK",
             stake: "",
             odd: "",
             commission: 0,
@@ -2082,6 +2160,7 @@ function Editor({
           {
             id: uid(),
             bookmakerId: "",
+            betType: "BACK",
             stake: "",
             odd: "",
             commission: 0,
@@ -2107,12 +2186,20 @@ function Editor({
   );
   const payoutMultiplier = (leg: Leg) => {
     if (leg.odd === "" || leg.odd <= 1) return 0;
+    if (leg.betType === "LAY")
+      return 1 + (1 - leg.commission / 100) / (leg.odd - 1);
     const profitFactor =
       (leg.odd - 1) * (1 + leg.increase / 100) * (1 - leg.commission / 100);
     return leg.usesBetCredit ? profitFactor : 1 + profitFactor;
   };
+  const riskAmount = (leg: Leg) => {
+    const stake = Number(leg.stake || 0);
+    return leg.betType === "LAY" && leg.odd !== ""
+      ? stake * (leg.odd - 1)
+      : stake;
+  };
   const total = legs.reduce(
-    (s, l) => s + (l.usesBetCredit ? 0 : Number(l.stake || 0)),
+    (s, l) => s + (l.usesBetCredit ? 0 : riskAmount(l)),
     0,
   );
   const isCalculationReady = legs.every(
@@ -2130,7 +2217,7 @@ function Editor({
       ? `Informe o valor da entrada ${label}`
       : `Informe a ODD da entrada ${label}`;
   })();
-  const returns = legs.map((l) => Number(l.stake || 0) * payoutMultiplier(l));
+  const returns = legs.map((l) => riskAmount(l) * payoutMultiplier(l));
   const allStakesReady = legs.every((leg) => leg.stake !== "" && leg.stake > 0);
   const localScenarioResults = legs.map((leg, index) =>
     allStakesReady && leg.odd !== "" && leg.odd > 1
@@ -2166,7 +2253,7 @@ function Editor({
       anchor.odd <= 1
     )
       return nextLegs;
-    const anchorPayoutMultiplier = payoutMultiplier(anchor);
+    const anchorReturn = riskAmount(anchor) * payoutMultiplier(anchor);
     return nextLegs.map((leg, index) => {
       if (
         index === 0 ||
@@ -2176,12 +2263,12 @@ function Editor({
       )
         return leg;
       const legPayoutMultiplier = payoutMultiplier(leg);
+      const riskPerStake = leg.betType === "LAY" ? leg.odd - 1 : 1;
       return {
         ...leg,
         stake:
           Math.round(
-            ((Number(anchor.stake) * anchorPayoutMultiplier) /
-              legPayoutMultiplier +
+            (anchorReturn / (riskPerStake * legPayoutMultiplier) +
               Number.EPSILON) *
               100,
           ) / 100,
@@ -2221,6 +2308,7 @@ function Editor({
         .preview(
           legs.map((leg, index) => ({
             stake: leg.stake === "" ? undefined : Number(leg.stake).toFixed(2),
+            betType: leg.betType,
             odd: Number(leg.odd).toString(),
             commissionPercent: leg.commission.toString(),
             cashbackPercent: leg.cashback.toString(),
@@ -2575,6 +2663,7 @@ function Editor({
                   {
                     id: uid(),
                     bookmakerId: "",
+                    betType: "BACK",
                     stake: "",
                     odd: "",
                     commission: 0,
@@ -2655,6 +2744,7 @@ export default function Home() {
       : undefined,
     legs: surebet.legs.map((leg) => ({
       bookmakerAccountId: leg.bookmakerId,
+      betType: leg.betType,
       stake: Number(leg.stake).toFixed(2),
       odd: Number(leg.odd).toString(),
       commissionPercent: leg.commission.toString(),

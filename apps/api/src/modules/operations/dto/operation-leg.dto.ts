@@ -7,6 +7,8 @@ import {
   Matches,
 } from "class-validator";
 import { trimString } from "../../auth/dto/transforms";
+import { BetType } from "@prisma/client";
+import { IsEnum } from "class-validator";
 
 const decimal = /^\d{1,17}(\.\d{1,6})?$/;
 const money = /^\d{1,17}(\.\d{1,2})?$/;
@@ -14,6 +16,10 @@ const money = /^\d{1,17}(\.\d{1,2})?$/;
 export class OperationLegDto {
   @IsUUID()
   bookmakerAccountId!: string;
+
+  @IsOptional()
+  @IsEnum(BetType)
+  betType?: BetType;
 
   @IsString()
   @Matches(money)
@@ -57,6 +63,10 @@ export class OperationLegDto {
 }
 
 export class PreviewOperationLegDto {
+  @IsOptional()
+  @IsEnum(BetType)
+  betType?: BetType;
+
   @IsOptional()
   @IsString()
   @Matches(money)

@@ -195,6 +195,7 @@ export class WalletService {
         amount: item.amount.toFixed(2),
         occurredAt: item.occurredAt.toISOString(),
         metadata: item.metadata,
+        betType: item.betType,
         activity: walletActivity(item.type, item.idempotencyKey),
       })),
       pageInfo: {

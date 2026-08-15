@@ -225,3 +225,19 @@ Pendências deliberadas:
 - O web usa tipos públicos mantidos na camada de feature. Geração automática a partir do OpenAPI continua recomendada no endurecimento do CI, sem bloquear o contrato atual.
 - Extrato detalhado, depósito, saque e ajuste já têm API, mas a tela visual atual ainda só apresenta o resumo da casa; completar essas interações quando a interface correspondente for desenhada.
 - O ciclo E2E visual completo depende do PostgreSQL de desenvolvimento ativo e deve ser executado antes do deploy.
+
+## Extensão — apostas Lay
+
+Status: implementada e validada por lint, builds e testes automatizados.
+
+- Linhas aceitam `BACK` e `LAY`; a interface exibe responsabilidade e odd Back
+  equivalente para Lay.
+- O motor `1.1.0` equilibra Lay pela responsabilidade e aplica comissão decimal
+  somente ao ganho.
+- API e ledger debitam, reservam, estornam e liquidam a responsabilidade da linha
+  Lay, preservando o comportamento Back existente.
+- Lay não aceita crédito de aposta, cashback ou aumento.
+- A migration `20260815100000_add_lay_bets` adiciona `bet_type` e `risk_amount`,
+  preenchendo operações antigas como Back sem alterar seus valores.
+- Validação concluída com 80 testes da API, 21 testes do motor, lint de todos os
+  workspaces e build de produção do Next.

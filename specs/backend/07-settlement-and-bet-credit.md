@@ -9,7 +9,8 @@ Regras da primeira versão:
 - operação deve estar `OPEN`;
 - todas as pernas recebem `WON` ou `LOST`;
 - pelo menos uma perna deve ser `WON`;
-- payout é calculado pelo servidor;
+- payout é calculado pelo servidor; uma linha Lay vencedora devolve a
+  responsabilidade e credita o ganho líquido de comissão;
 - retornos vencedores são creditados uma única vez.
 
 ## Operação geradora

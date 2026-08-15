@@ -83,7 +83,9 @@ run("operações financeiras com PostgreSQL real", () => {
       requestHash: "a".repeat(64),
       legs: snapshot.legs.map((leg, index) => ({
         bookmakerAccountId: accountIds[index],
+        betType: leg.betType,
         stake: new Prisma.Decimal(leg.stake.toString()),
+        riskAmount: new Prisma.Decimal(leg.riskAmount.toString()),
         odd: new Prisma.Decimal(leg.odd.toString()),
         commissionPercent: new Prisma.Decimal(0),
         cashbackPercent: new Prisma.Decimal(0),

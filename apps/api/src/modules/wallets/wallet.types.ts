@@ -1,4 +1,8 @@
-import { BookmakerAccountStatus, WalletTransactionType } from "@prisma/client";
+import {
+  BetType,
+  BookmakerAccountStatus,
+  WalletTransactionType,
+} from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 
 export interface BookmakerAccountRecord {
@@ -23,6 +27,7 @@ export interface WalletTransactionRecord {
   occurredAt: Date;
   metadata: unknown;
   idempotencyKey: string;
+  betType?: BetType;
 }
 
 export interface FinancialCommand {

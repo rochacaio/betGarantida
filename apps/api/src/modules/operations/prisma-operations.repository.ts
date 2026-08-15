@@ -140,7 +140,7 @@ export class PrismaOperationsRepository implements OperationsRepository {
               leg.bookmakerAccountId,
               command.operationId,
               leg.id,
-              leg.stake,
+              leg.riskAmount,
               WalletTransactionType.BET_REFUND,
               `edit-refund:${randomUUID()}`,
             );
@@ -292,7 +292,7 @@ export class PrismaOperationsRepository implements OperationsRepository {
               leg.bookmakerAccountId,
               operation.id,
               leg.id,
-              leg.stake,
+              leg.riskAmount,
               WalletTransactionType.BET_REFUND,
               `cancel:${operation.id}:${leg.id}`,
             );
@@ -399,6 +399,7 @@ export class PrismaOperationsRepository implements OperationsRepository {
           const settlement = calculateSettlement(
             operation.legs.map((leg) => ({
               stake: leg.stake.toString(),
+              betType: leg.betType,
               odd: leg.odd.toString(),
               commissionPercent: leg.commissionPercent.toString(),
               cashbackPercent: leg.cashbackPercent.toString(),
@@ -866,7 +867,7 @@ export class PrismaOperationsRepository implements OperationsRepository {
           leg.bookmakerAccountId,
           operationId,
           created.id,
-          leg.stake.neg(),
+          leg.riskAmount.neg(),
           WalletTransactionType.BET_STAKE,
           `operation:${operationId}:${key}:${position}`,
         );
@@ -905,7 +906,7 @@ export class PrismaOperationsRepository implements OperationsRepository {
     command: OperationWriteCommand,
     oldLegs: Array<{
       bookmakerAccountId: string;
-      stake: Prisma.Decimal;
+      riskAmount: Prisma.Decimal;
       usesBetCredit: boolean;
     }> = [],
   ) {
@@ -940,14 +941,14 @@ export class PrismaOperationsRepository implements OperationsRepository {
   }
 
   private aggregate(
-    legs: Array<{ bookmakerAccountId: string; stake: Prisma.Decimal }>,
+    legs: Array<{ bookmakerAccountId: string; riskAmount: Prisma.Decimal }>,
   ) {
     const map = new Map<string, Prisma.Decimal>();
     for (const leg of legs)
       map.set(
         leg.bookmakerAccountId,
         (map.get(leg.bookmakerAccountId) ?? new Prisma.Decimal(0)).add(
-          leg.stake,
+          leg.riskAmount,
         ),
       );
     return map;

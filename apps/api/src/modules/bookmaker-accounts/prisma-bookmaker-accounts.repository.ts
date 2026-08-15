@@ -82,12 +82,12 @@ export class PrismaBookmakerAccountsRepository
         usesBetCredit: false,
         operation: { userId, status: OperationStatus.OPEN },
       },
-      _sum: { stake: true },
+      _sum: { riskAmount: true },
     });
     const openStake = new Map(
       grouped.map((item) => [
         item.bookmakerAccountId,
-        item._sum.stake ?? new Prisma.Decimal(0),
+        item._sum.riskAmount ?? new Prisma.Decimal(0),
       ]),
     );
     return accounts.map((account) => ({

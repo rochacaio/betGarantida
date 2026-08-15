@@ -40,5 +40,7 @@ describe("Prisma domain schema", () => {
     expect(schema).toContain("WAITING_CREDIT_USE");
     expect(schema).toContain("enum BetCreditStatus {");
     expect(schema).toContain("CONSUMED");
+    expect(schema).toContain("enum BetType {");
+    expect(schema).toContain("riskAmount");
   });
 });

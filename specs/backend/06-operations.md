@@ -10,7 +10,7 @@
 4. bloqueia contas/créditos relevantes;
 5. valida os saldos agregados;
 6. cria operação e pernas;
-7. debita stakes em dinheiro;
+7. debita a stake nas linhas Back e a responsabilidade nas linhas Lay;
 8. cria crédito `EXPECTED` quando aplicável;
 9. confirma tudo em uma transação.
 
@@ -56,4 +56,6 @@ Não há `DELETE` físico para operações com efeitos financeiros. Operações 
 - `usesBetCredit=true` exige crédito disponível e valor compatível.
 - A operação não pode usar crédito originado por ela própria.
 - A mesma origem não pode ser selecionada por operações concorrentes.
+- `betType=LAY` exige dinheiro real, não aceita crédito, cashback ou aumento e
+  reserva `stake × (odd - 1)` no saldo da casa.
 - Todos os campos obrigatórios geram erros estruturados por caminho, para o toastr e os campos do frontend.

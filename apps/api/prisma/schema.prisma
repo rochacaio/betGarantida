@@ -50,6 +50,11 @@ enum BetLegResult {
   LOST
 }
 
+enum BetType {
+  BACK
+  LAY
+}
+
 enum BetCreditStatus {
   EXPECTED
   AVAILABLE
@@ -214,7 +219,9 @@ model BetLeg {
   bookmakerAccountId String              @map("bookmaker_account_id") @db.Uuid
   betCreditId        String?             @unique @map("bet_credit_id") @db.Uuid
   position           Int
+  betType            BetType             @default(BACK) @map("bet_type")
   stake              Decimal             @db.Decimal(19, 2)
+  riskAmount         Decimal             @map("risk_amount") @db.Decimal(19, 2)
   odd                Decimal             @db.Decimal(19, 6)
   commissionPercent  Decimal             @default(0) @map("commission_percent") @db.Decimal(9, 6)
   cashbackPercent    Decimal             @default(0) @map("cashback_percent") @db.Decimal(9, 6)

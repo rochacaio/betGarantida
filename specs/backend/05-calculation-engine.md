@@ -4,7 +4,7 @@ O documento matemático de origem é `README_Bet_Sem_Medo.md`. Este pacote deve 
 
 ## Entradas por perna
 
-`stake`, `odd`, `increasePercent`, `commissionPercent`, `cashbackPercent`, `usesBetCredit`.
+`betType`, `stake`, `odd`, `increasePercent`, `commissionPercent`, `cashbackPercent`, `usesBetCredit`.
 
 ## Fórmulas base
 
@@ -25,6 +25,23 @@ stakeN = targetPayout / payoutMultiplierN
 ```
 
 Onde `payoutMultiplier` é `effectiveOdd` para caixa e `profitFactor` para crédito.
+
+## Linha Lay
+
+No `LAY`, o usuário aposta contra o resultado. O valor informado é a stake Lay,
+mas o dinheiro exposto e movimentado na casa é a responsabilidade:
+
+```text
+liability = layStake × (odd - 1)
+netWin = layStake × (1 - commission/100)
+effectiveBackOdd = 1 + netWin / liability
+layPayoutMultiplier = effectiveBackOdd
+```
+
+Se a linha Lay vence, a casa devolve a responsabilidade e credita `netWin`. Se
+perde, a responsabilidade é perdida. Balanceamento, investimento real, saldo em
+apostas e ROI usam `liability`, nunca a stake Lay. Crédito de aposta, cashback e
+aumento não são aceitos em uma linha Lay.
 
 Quando houver cashback em dinheiro, o balanceamento considera o valor recuperado
 no cenário em que a linha perde:
@@ -65,7 +82,7 @@ Cashback deve seguir exatamente as regras do README e possuir cenários de teste
 
 ## Snapshot de resposta
 
-- por perna: `profitFactor`, `effectiveOdd`, `projectedPayout`, `scenarioResult`;
+- por perna: `betType`, `riskAmount`, `profitFactor`, `effectiveOdd`, `projectedPayout`, `scenarioResult`;
 - operação: `realCashInvestment`, `promotionalStake`, `protectedReturn`, `projectedProfit`, `projectedRoiPercent`, `engineVersion`.
 
 ## Fonte de verdade

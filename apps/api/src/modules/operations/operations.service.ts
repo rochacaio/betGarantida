@@ -53,6 +53,7 @@ export class OperationsService {
     try {
       const balanceInputs = dto.legs.map((leg) => ({
         stake: leg.stake,
+        betType: leg.betType ?? "BACK",
         odd: leg.odd,
         commissionPercent: leg.commissionPercent ?? "0",
         cashbackPercent: leg.cashbackPercent ?? "0",
@@ -351,7 +352,9 @@ export class OperationsService {
         bookmakerAccountId: dto.legs[index].bookmakerAccountId,
         betCreditId: dto.legs[index].betCreditId,
         usesFreeBetCredit: dto.legs[index].usesFreeBetCredit ?? false,
+        betType: leg.betType,
         stake: new Prisma.Decimal(leg.stake.toString()),
+        riskAmount: new Prisma.Decimal(leg.riskAmount.toString()),
         odd: new Prisma.Decimal(leg.odd.toString()),
         commissionPercent: new Prisma.Decimal(leg.commissionPercent.toString()),
         cashbackPercent: new Prisma.Decimal(leg.cashbackPercent.toString()),
@@ -368,6 +371,7 @@ export class OperationsService {
   private engineLeg(leg: OperationLegDto) {
     return {
       stake: leg.stake,
+      betType: leg.betType ?? "BACK",
       odd: leg.odd,
       commissionPercent: leg.commissionPercent ?? "0",
       cashbackPercent: leg.cashbackPercent ?? "0",
@@ -398,6 +402,11 @@ export class OperationsService {
         code: "REQUIRED_WHEN_GENERATES_CREDIT",
       });
     dto.legs.forEach((leg, index) => {
+      if (leg.betType === "LAY" && leg.usesBetCredit)
+        fields.push({
+          path: `legs.${index}.usesBetCredit`,
+          code: "FORBIDDEN_FOR_LAY",
+        });
       if (leg.usesBetCredit && !leg.usesFreeBetCredit && !leg.betCreditId)
         fields.push({
           path: `legs.${index}.betCreditId`,
@@ -531,6 +540,7 @@ export class OperationsService {
       legs: operation.legs.map((leg) => ({
         ...leg,
         stake: decimal(leg.stake),
+        riskAmount: decimal(leg.riskAmount),
         odd: leg.odd.toString(),
         commissionPercent: leg.commissionPercent.toString(),
         cashbackPercent: leg.cashbackPercent.toString(),

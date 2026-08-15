@@ -1,9 +1,11 @@
-import { OperationStatus, Prisma } from "@prisma/client";
+import { BetType, OperationStatus, Prisma } from "@prisma/client";
 
 export interface OperationLegCommand {
   bookmakerAccountId: string;
   betCreditId?: string;
+  betType: BetType;
   stake: Prisma.Decimal;
+  riskAmount: Prisma.Decimal;
   odd: Prisma.Decimal;
   commissionPercent: Prisma.Decimal;
   cashbackPercent: Prisma.Decimal;

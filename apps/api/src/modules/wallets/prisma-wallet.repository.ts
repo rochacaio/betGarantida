@@ -302,11 +302,13 @@ export class PrismaWalletRepository implements WalletRepository {
       orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
       take: input.limit + 1,
       ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
+      include: { leg: { select: { betType: true } } },
     });
     const hasNextPage = rows.length > input.limit;
-    const items = rows
-      .slice(0, input.limit)
-      .map((row) => this.transactionRecord(row));
+    const items = rows.slice(0, input.limit).map((row) => ({
+      ...this.transactionRecord(row),
+      betType: row.leg?.betType,
+    }));
     return {
       items,
       nextCursor: hasNextPage ? (items.at(-1)?.id ?? null) : null,

@@ -46,7 +46,11 @@ OPEN -> CANCELLED
 
 ### BetLeg
 
-`id`, `operationId`, `bookmakerAccountId`, `position`, `stake`, `odd`, `commissionPercent`, `cashbackPercent`, `increasePercent`, `usesBetCredit`, `usesFreeBetCredit`, `result`, snapshots de cálculo e timestamps.
+`id`, `operationId`, `bookmakerAccountId`, `position`, `betType`, `stake`, `riskAmount`, `odd`, `commissionPercent`, `cashbackPercent`, `increasePercent`, `usesBetCredit`, `usesFreeBetCredit`, `result`, snapshots de cálculo e timestamps.
+
+`betType` pode ser `BACK` ou `LAY`. Em `BACK`, `riskAmount = stake`. Em `LAY`,
+`stake` representa o ganho bruto oferecido na bolsa e `riskAmount` representa a
+responsabilidade realmente reservada: `stake × (odd - 1)`.
 
 Resultados iniciais: `PENDING`, `WON`, `LOST`. `VOID`, `CASHOUT` e resultados parciais exigirão regras financeiras próprias antes de serem habilitados.
 
@@ -63,6 +67,8 @@ Estados: `EXPECTED`, `AVAILABLE`, `NOT_GRANTED`, `CONSUMED`, `EXPIRED`, `CANCELL
 - Conta da casa deve estar ativa e pertencer ao usuário.
 - Stake e crédito são maiores que zero; odd é maior que 1.
 - Comissão fica entre 0 e 100; cashback e aumento não podem ser negativos.
+- Linhas `LAY` não usam crédito de aposta, cashback ou aumento; sua comissão é
+  aplicada ao lucro da bolsa.
 - Uma perna com crédito referencia exatamente um `BetCredit AVAILABLE` do usuário.
 - Um crédito só pode ser consumido uma vez.
 - A soma dos lançamentos de uma conta deve reconciliar com `cachedBalance`.

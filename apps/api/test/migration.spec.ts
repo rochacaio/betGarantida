@@ -48,4 +48,14 @@ describe("Initial domain migration", () => {
       'DROP CONSTRAINT IF EXISTS "bet_legs_credit_reference_check"',
     );
   });
+
+  it("backfills existing legs as Back with stake equal to risk amount", () => {
+    const layMigration = readFileSync(
+      join(migrationsRoot, "20260815100000_add_lay_bets", "migration.sql"),
+      "utf8",
+    );
+    expect(layMigration).toContain('CREATE TYPE "BetType"');
+    expect(layMigration).toContain('SET "risk_amount" = "stake"');
+    expect(layMigration).toContain('ALTER COLUMN "risk_amount" SET NOT NULL');
+  });
 });

@@ -1,6 +1,7 @@
 import type Decimal from "decimal.js";
 
 export type DecimalInput = Decimal.Value;
+export type BetType = "BACK" | "LAY";
 
 export interface BetLegInput {
   stake: DecimalInput;
@@ -9,6 +10,7 @@ export interface BetLegInput {
   commissionPercent?: DecimalInput;
   cashbackPercent?: DecimalInput;
   usesBetCredit?: boolean;
+  betType?: BetType;
 }
 
 export interface BalanceLegInput extends Omit<BetLegInput, "stake"> {
@@ -23,6 +25,8 @@ export interface PreparedBetLeg {
   commissionPercent: Decimal;
   cashbackPercent: Decimal;
   usesBetCredit: boolean;
+  betType: BetType;
+  riskAmount: Decimal;
   profitFactor: Decimal;
   effectiveOdd: Decimal;
   payoutMultiplier: Decimal;

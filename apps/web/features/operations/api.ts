@@ -4,7 +4,9 @@ export type ApiLeg = {
   id: string;
   bookmakerAccountId: string;
   betCreditId: string | null;
+  betType: "BACK" | "LAY";
   stake: string;
+  riskAmount: string;
   odd: string;
   commissionPercent: string;
   cashbackPercent: string;
@@ -43,6 +45,7 @@ export type OperationInput = {
   expectedBetCredit?: string;
   legs: Array<{
     bookmakerAccountId: string;
+    betType: "BACK" | "LAY";
     stake: string;
     odd: string;
     commissionPercent: string;

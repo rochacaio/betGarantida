@@ -71,7 +71,9 @@ function record() {
       bookmakerAccountId: leg.bookmakerAccountId,
       betCreditId: null,
       position,
+      betType: "BACK" as const,
       stake: new Prisma.Decimal(leg.stake),
+      riskAmount: new Prisma.Decimal(leg.stake),
       odd: new Prisma.Decimal(leg.odd),
       commissionPercent: new Prisma.Decimal(0),
       cashbackPercent: new Prisma.Decimal(0),
@@ -116,7 +118,7 @@ describe("OperationsService", () => {
       realCashInvestment: "221.5",
       protectedReturn: "243",
       projectedProfit: "21.5",
-      engineVersion: "1.0.0",
+      engineVersion: "1.1.0",
     });
     expect(repository.create.mock.calls).toHaveLength(0);
   });
@@ -183,10 +185,41 @@ describe("OperationsService", () => {
       "100.00",
       "121.50",
     ]);
-    expect(command.engineVersion).toBe("1.0.0");
+    expect(command.engineVersion).toBe("1.1.0");
     expect(command.calculationSnapshot).toMatchObject({
       roundingPolicy: "HALF_UP_2_DECIMALS_RECALCULATE",
     });
+  });
+
+  it("persiste Lay com valor informado e responsabilidade como risco real", async () => {
+    repository.create.mockResolvedValue(record());
+    const input = dto();
+    input.legs = [
+      { ...input.legs[0], stake: "100.00", odd: "2.00" },
+      {
+        ...input.legs[1],
+        betType: "LAY",
+        stake: "25.74",
+        odd: "7.60",
+        commissionPercent: "2.5",
+      },
+    ];
+    await service.create(userId, input, idempotencyKey);
+    const lay = repository.create.mock.calls[0]?.[0].legs[1];
+    expect(lay?.betType).toBe("LAY");
+    expect(lay?.stake.toFixed(2)).toBe("25.74");
+    expect(lay?.riskAmount.toFixed(2)).toBe("169.88");
+    expect(lay?.effectiveOdd.toFixed(3)).toBe("1.148");
+  });
+
+  it("não permite usar crédito de aposta em uma linha Lay", async () => {
+    const input = dto();
+    input.legs[0].betType = "LAY";
+    input.legs[0].usesBetCredit = true;
+    input.legs[0].usesFreeBetCredit = true;
+    await expect(
+      service.create(userId, input, idempotencyKey),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
   it("exige valor positivo quando gera crédito", async () => {
