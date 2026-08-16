@@ -85,6 +85,14 @@ export interface OperationsRepository {
     idempotencyKey: string;
     requestHash: string;
   }): Promise<OperationRecord>;
+  grantGeneratedCredit(input: {
+    userId: string;
+    operationId: string;
+    version: number;
+    grantedCreditAmount: Prisma.Decimal;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<OperationRecord>;
   correctGeneratedCredit(input: {
     userId: string;
     operationId: string;
@@ -123,6 +131,7 @@ export class OperationInsufficientBalanceError extends Error {
 export class OperationCreditUnavailableError extends Error {}
 export class OperationCreditReservedError extends Error {}
 export class OperationCreditCorrectionUnavailableError extends Error {}
+export class OperationCreditGrantUnavailableError extends Error {}
 export class OperationCreditExpirationUnavailableError extends Error {}
 export class OperationInvalidSettlementError extends Error {}
 export class OperationDeleteCreditInUseError extends Error {}

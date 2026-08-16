@@ -17,6 +17,7 @@ import {
   OperationCreditUnavailableError,
   OperationCreditReservedError,
   OperationCreditCorrectionUnavailableError,
+  OperationCreditGrantUnavailableError,
   OperationCreditExpirationUnavailableError,
   OperationDeleteCreditInUseError,
   OperationIdempotencyConflictError,
@@ -131,6 +132,11 @@ export class PrismaOperationsRepository implements OperationsRepository {
             throw new OperationNotOpenError();
           if (old.version !== command.version)
             throw new OperationStaleVersionError();
+          if (
+            old.generatedCredit &&
+            old.generatedCredit.status !== BetCreditStatus.EXPECTED
+          )
+            throw new OperationCreditCorrectionUnavailableError();
           await this.lockAndValidateAccounts(tx, command, old.legs);
 
           for (const leg of old.legs.filter((item) => !item.usesBetCredit)) {
@@ -278,6 +284,11 @@ export class PrismaOperationsRepository implements OperationsRepository {
             throw new OperationNotOpenError();
           if (operation.version !== input.version)
             throw new OperationStaleVersionError();
+          if (
+            operation.generatedCredit?.consumerOperationId ||
+            operation.generatedCredit?.status === BetCreditStatus.CONSUMED
+          )
+            throw new OperationDeleteCreditInUseError();
           await this.lockAccountIds(
             tx,
             input.userId,
@@ -306,7 +317,9 @@ export class PrismaOperationsRepository implements OperationsRepository {
           await tx.betCredit.updateMany({
             where: {
               sourceOperationId: operation.id,
-              status: BetCreditStatus.EXPECTED,
+              status: {
+                in: [BetCreditStatus.EXPECTED, BetCreditStatus.AVAILABLE],
+              },
             },
             data: { status: BetCreditStatus.CANCELLED },
           });
@@ -387,6 +400,7 @@ export class PrismaOperationsRepository implements OperationsRepository {
             operation.legs.some((leg) => !byId.has(leg.id)) ||
             !input.legs.some((leg) => leg.result === "WON") ||
             (operation.generatesBetCredit &&
+              operation.generatedCredit?.status === BetCreditStatus.EXPECTED &&
               input.creditGenerated === undefined)
           )
             throw new OperationInvalidSettlementError();
@@ -440,7 +454,17 @@ export class PrismaOperationsRepository implements OperationsRepository {
           let status: OperationStatus = OperationStatus.SETTLED;
           let settledAt: Date | null = now;
           if (operation.generatesBetCredit) {
-            if (input.creditGenerated) {
+            if (
+              operation.generatedCredit?.status === BetCreditStatus.AVAILABLE
+            ) {
+              status = OperationStatus.WAITING_CREDIT_USE;
+              settledAt = null;
+            } else if (
+              operation.generatedCredit?.status === BetCreditStatus.CONSUMED
+            ) {
+              status = OperationStatus.SETTLED;
+              settledAt = now;
+            } else if (input.creditGenerated) {
               if (!input.grantedCreditAmount?.gt(0))
                 throw new OperationInvalidSettlementError();
               await tx.betCredit.update({
@@ -544,6 +568,76 @@ export class PrismaOperationsRepository implements OperationsRepository {
     );
   }
 
+  grantGeneratedCredit(input: {
+    userId: string;
+    operationId: string;
+    version: number;
+    grantedCreditAmount: Prisma.Decimal;
+    idempotencyKey: string;
+    requestHash: string;
+  }) {
+    return this.serializable(() =>
+      this.prisma.$transaction(
+        async (tx) => {
+          const replay = await this.idempotentReplay(
+            tx,
+            input.userId,
+            input.idempotencyKey,
+            input.requestHash,
+          );
+          if (replay) return replay;
+          await this.lockOperation(tx, input.userId, input.operationId);
+          const operation = await tx.operation.findFirst({
+            where: { id: input.operationId, userId: input.userId },
+            include,
+          });
+          if (!operation) throw new OperationNotFoundError();
+          if (operation.version !== input.version)
+            throw new OperationStaleVersionError();
+          if (
+            operation.status !== OperationStatus.OPEN ||
+            !operation.generatesBetCredit ||
+            !operation.generatedCredit ||
+            operation.generatedCredit.status !== BetCreditStatus.EXPECTED
+          )
+            throw new OperationCreditGrantUnavailableError();
+
+          await tx.betCredit.update({
+            where: { id: operation.generatedCredit.id },
+            data: {
+              status: BetCreditStatus.AVAILABLE,
+              grantedAmount: input.grantedCreditAmount,
+            },
+          });
+          await tx.operation.update({
+            where: { id: operation.id },
+            data: { version: { increment: 1 } },
+          });
+          await this.auditCredit(
+            tx,
+            input.userId,
+            operation.generatedCredit.id,
+            "BET_CREDIT_GRANTED_EARLY",
+            { grantedAmount: input.grantedCreditAmount.toFixed(2) },
+          );
+          await this.recordMutation(
+            tx,
+            input.userId,
+            operation.id,
+            input.idempotencyKey,
+            input.requestHash,
+            "GRANT_GENERATED_CREDIT",
+          );
+          return tx.operation.findUniqueOrThrow({
+            where: { id: operation.id },
+            include,
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    );
+  }
+
   correctGeneratedCredit(input: {
     userId: string;
     operationId: string;
@@ -571,7 +665,8 @@ export class PrismaOperationsRepository implements OperationsRepository {
           if (operation.version !== input.version)
             throw new OperationStaleVersionError();
           if (
-            operation.status !== OperationStatus.WAITING_CREDIT_USE ||
+            (operation.status !== OperationStatus.OPEN &&
+              operation.status !== OperationStatus.WAITING_CREDIT_USE) ||
             !operation.generatedCredit ||
             operation.generatedCredit.status !== BetCreditStatus.AVAILABLE ||
             operation.generatedCredit.consumerOperationId !== null

@@ -107,6 +107,21 @@ export const operationsApi = {
         }),
       },
     ),
+  grantGeneratedCredit: (
+    operation: { id: string; version: number },
+    grantedCreditAmount: string,
+  ) =>
+    api<{ operation: ApiOperation }>(
+      `/operations/${operation.id}/generated-credit/grant`,
+      {
+        method: "POST",
+        headers: commandHeaders(),
+        body: JSON.stringify({
+          version: operation.version,
+          grantedCreditAmount,
+        }),
+      },
+    ),
   expireGeneratedCredit: (operation: { id: string; version: number }) =>
     api<{ operation: ApiOperation }>(
       `/operations/${operation.id}/generated-credit/expire`,

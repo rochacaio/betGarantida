@@ -17,10 +17,21 @@ Regras da primeira versão:
 
 Ao criar com `generatesBetCredit=true`, existe um crédito `EXPECTED`.
 
+O crédito pode ser concedido antes da liquidação das linhas por
+`POST /operations/:id/generated-credit/grant`. A operação deve continuar
+`OPEN`, o crédito passa de `EXPECTED` para `AVAILABLE` e já pode ser reservado
+por outra surebet. Essa ação não calcula retorno, não altera resultados das
+linhas e não inclui a operação no dashboard.
+
 Na liquidação:
 
 - `creditGenerated=false`: crédito vira `NOT_GRANTED` e operação vira `SETTLED`;
 - `creditGenerated=true`: `grantedAmount` é obrigatório, crédito vira `AVAILABLE` e operação vira `WAITING_CREDIT_USE`.
+
+Quando o crédito já tiver sido concedido antecipadamente, a liquidação não
+solicita uma nova decisão nem cria outro crédito. Se ele ainda estiver
+`AVAILABLE`, a geradora passa para `WAITING_CREDIT_USE`; se já estiver
+`CONSUMED`, a geradora passa diretamente para `SETTLED`.
 
 O valor concedido pode diferir do esperado e o valor real prevalece.
 
@@ -52,6 +63,10 @@ Ao liquidar a consumidora:
 3. marcar a geradora `SETTLED` e preencher `settledAt`;
 4. marcar a consumidora `SETTLED`;
 5. confirmar tudo atomicamente.
+
+Se a consumidora for liquidada enquanto a geradora ainda está `OPEN`, o crédito
+é consumido, mas a geradora permanece aberta. Ela será encerrada somente após a
+liquidação de todas as suas linhas.
 
 ## Resultado promocional combinado
 

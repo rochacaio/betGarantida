@@ -25,6 +25,7 @@ import { SettleOperationDto } from "./dto/settle-operation.dto";
 import { CorrectGeneratedCreditDto } from "./dto/correct-generated-credit.dto";
 import { DeleteOperationDto } from "./dto/delete-operation.dto";
 import { ExpireGeneratedCreditDto } from "./dto/expire-generated-credit.dto";
+import { GrantGeneratedCreditDto } from "./dto/grant-generated-credit.dto";
 
 @ApiTags("operations")
 @ApiCookieAuth("betgarantida_session")
@@ -106,6 +107,21 @@ export class OperationsController {
     @Headers("idempotency-key") idempotencyKey = "",
   ) {
     return this.operations.correctGeneratedCredit(
+      user.id,
+      id,
+      dto,
+      idempotencyKey,
+    );
+  }
+
+  @Post(":id/generated-credit/grant")
+  grantGeneratedCredit(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: GrantGeneratedCreditDto,
+    @Headers("idempotency-key") idempotencyKey = "",
+  ) {
+    return this.operations.grantGeneratedCredit(
       user.id,
       id,
       dto,

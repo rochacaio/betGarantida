@@ -239,5 +239,19 @@ Status: implementada e validada por lint, builds e testes automatizados.
 - Lay não aceita crédito de aposta, cashback ou aumento.
 - A migration `20260815100000_add_lay_bets` adiciona `bet_type` e `risk_amount`,
   preenchendo operações antigas como Back sem alterar seus valores.
-- Validação concluída com 80 testes da API, 21 testes do motor, lint de todos os
+- Validação concluída com 81 testes da API, 21 testes do motor, lint de todos os
   workspaces e build de produção do Next.
+
+## Extensão — concessão antecipada de crédito
+
+Status: implementada e validada.
+
+- Uma surebet geradora aberta pode disponibilizar o crédito recebido sem
+  liquidar suas linhas.
+- O crédito fica selecionável imediatamente e a geradora continua fora dos
+  resultados realizados do dashboard.
+- Consumidora e geradora podem ser liquidadas em qualquer ordem; a geradora só
+  termina quando suas linhas e o uso ou perda do crédito estiverem concluídos.
+- A interface oferece a ação `Crédito já foi gerado`, solicita o valor real e
+  atualiza lista, seletor e toasts.
+- Não há alteração de schema nem migration nova para esta extensão.

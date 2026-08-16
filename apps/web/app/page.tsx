@@ -754,12 +754,14 @@ function SurebetTable({
   onEdit,
   onDelete,
   onCreditLost,
+  onCreditGranted,
 }: {
   surebets: Surebet[];
   bookmakers: Bookmaker[];
   onEdit?: (s: Surebet) => void;
   onDelete?: (s: Surebet) => void;
   onCreditLost?: (s: Surebet) => void;
+  onCreditGranted?: (s: Surebet) => void;
 }) {
   const statusLabel = (status: Surebet["status"]) =>
     status === "OPEN"
@@ -867,6 +869,18 @@ function SurebetTable({
                 </td>
                 <td>
                   <div className="surebet-actions">
+                    {onCreditGranted &&
+                      s.status === "OPEN" &&
+                      s.generatesBetCredit &&
+                      s.generatedCreditStatus === "EXPECTED" && (
+                        <button
+                          type="button"
+                          className="credit-granted-operation"
+                          onClick={() => onCreditGranted(s)}
+                        >
+                          Crédito já foi gerado
+                        </button>
+                      )}
                     {onCreditLost &&
                       s.status === "WAITING_CREDIT_USE" &&
                       s.generatedCreditStatus === "AVAILABLE" &&
@@ -1737,6 +1751,7 @@ function Surebets({
   save,
   onDelete,
   onCreditLost,
+  onCreditGranted,
 }: {
   surebets: Surebet[];
   bookmakers: Bookmaker[];
@@ -1744,6 +1759,7 @@ function Surebets({
   save: (s: Surebet, stay?: boolean) => Promise<void>;
   onDelete: (s: Surebet) => Promise<void>;
   onCreditLost: (s: Surebet) => Promise<void>;
+  onCreditGranted: (s: Surebet) => Promise<void>;
 }) {
   const [editing, setEditing] = useState<Surebet>();
   return (
@@ -1799,6 +1815,7 @@ function Surebets({
               )
                 void onCreditLost(surebet);
             }}
+            onCreditGranted={(surebet) => void onCreditGranted(surebet)}
           />
         </article>
       </section>
@@ -2502,8 +2519,9 @@ function Editor({
       );
     if (!legs.some((leg) => leg.result === "WON"))
       return showValidationToast("Selecione pelo menos uma entrada vencedora.");
-    if (generatesBetCredit) return askIfCreditWasGenerated();
-    completeFinalization(false);
+    if (generatesBetCredit && !editing.creditGenerated)
+      return askIfCreditWasGenerated();
+    completeFinalization(!!editing.creditGenerated);
   };
   useEffect(() => {
     const handler = () => finalizeBet();
@@ -2880,6 +2898,37 @@ export default function Home() {
       );
     }
   };
+  const markCreditAsGranted = async (surebet: Surebet) => {
+    const informed = window.prompt(
+      "Qual foi o valor do crédito efetivamente recebido?",
+      Number(surebet.expectedBetCredit ?? 0).toFixed(2),
+    );
+    if (informed === null) return;
+    const normalized = Number(informed.replace(",", "."));
+    if (!Number.isFinite(normalized) || normalized <= 0) {
+      showToast(
+        "error",
+        "Valor inválido",
+        "Informe um valor de crédito maior que zero.",
+      );
+      return;
+    }
+    try {
+      await operationsApi.grantGeneratedCredit(surebet, normalized.toFixed(2));
+      await refresh();
+      showToast(
+        "success",
+        "Crédito disponibilizado",
+        "A surebet continua em aberto e o crédito já pode ser usado em outra entrada.",
+      );
+    } catch (failure) {
+      showToast(
+        "error",
+        "Não foi possível liberar o crédito",
+        errorMessage(failure, "Tente novamente."),
+      );
+    }
+  };
   const body = (() => {
     if (screen === "dashboard")
       return (
@@ -2909,6 +2958,7 @@ export default function Home() {
           save={save}
           onDelete={deleteSurebet}
           onCreditLost={markCreditAsLost}
+          onCreditGranted={markCreditAsGranted}
         />
       );
     return (

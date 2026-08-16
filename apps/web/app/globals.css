@@ -937,6 +937,19 @@ td:first-child small {
 .credit-lost-operation:hover {
   background: #3a3114;
 }
+.credit-granted-operation {
+  border: 1px solid #17744f;
+  border-radius: 8px;
+  background: #0b3022;
+  color: #22df91;
+  padding: 6px 9px;
+  font-size: 8px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.credit-granted-operation:hover {
+  background: #10452f;
+}
 .field {
   display: grid;
   gap: 7px;
@@ -2145,7 +2158,8 @@ dialog.edit-drawer-backdrop {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
   }
-  .surebet-table-wrap .credit-lost-operation {
+  .surebet-table-wrap .credit-lost-operation,
+  .surebet-table-wrap .credit-granted-operation {
     grid-column: 1 / -1;
     min-height: 38px;
   }

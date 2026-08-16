@@ -23,12 +23,14 @@ import { OperationLegDto } from "./dto/operation-leg.dto";
 import { ListOperationsDto } from "./dto/list-operations.dto";
 import { SettleOperationDto } from "./dto/settle-operation.dto";
 import { CorrectGeneratedCreditDto } from "./dto/correct-generated-credit.dto";
+import { GrantGeneratedCreditDto } from "./dto/grant-generated-credit.dto";
 import {
   OPERATIONS_REPOSITORY,
   OperationAccountError,
   OperationCreditUnavailableError,
   OperationCreditReservedError,
   OperationCreditCorrectionUnavailableError,
+  OperationCreditGrantUnavailableError,
   OperationCreditExpirationUnavailableError,
   OperationDeleteCreditInUseError,
   OperationInsufficientBalanceError,
@@ -273,6 +275,39 @@ export class OperationsService {
     };
   }
 
+  async grantGeneratedCredit(
+    userId: string,
+    id: string,
+    dto: GrantGeneratedCreditDto,
+    idempotencyKey: string,
+  ) {
+    this.assertIdempotencyKey(idempotencyKey);
+    const grantedCreditAmount = new Prisma.Decimal(dto.grantedCreditAmount);
+    if (!grantedCreditAmount.isPositive())
+      throw new UnprocessableEntityException(
+        "O valor do crédito deve ser maior que zero.",
+      );
+    return {
+      operation: this.response(
+        await this.execute(() =>
+          this.repository.grantGeneratedCredit({
+            userId,
+            operationId: id,
+            version: dto.version,
+            grantedCreditAmount,
+            idempotencyKey,
+            requestHash: this.hash([
+              "GRANT_GENERATED_CREDIT",
+              id,
+              dto.version,
+              grantedCreditAmount.toFixed(2),
+            ]),
+          }),
+        ),
+      ),
+    };
+  }
+
   async deleteOperation(
     userId: string,
     id: string,
@@ -497,6 +532,12 @@ export class OperationsService {
           code: "BET_CREDIT_CORRECTION_UNAVAILABLE",
           message:
             "O crédito só pode ser corrigido enquanto aguarda uso e ainda não foi reservado por outra surebet.",
+        });
+      if (error instanceof OperationCreditGrantUnavailableError)
+        throw new ConflictException({
+          code: "BET_CREDIT_GRANT_UNAVAILABLE",
+          message:
+            "O crédito só pode ser liberado antecipadamente em uma surebet aberta que ainda aguarda a geração do crédito.",
         });
       if (error instanceof OperationCreditExpirationUnavailableError)
         throw new ConflictException({

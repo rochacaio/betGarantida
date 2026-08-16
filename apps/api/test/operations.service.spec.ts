@@ -105,6 +105,7 @@ describe("OperationsService", () => {
       list: jest.fn(),
       cancel: jest.fn(),
       settle: jest.fn(),
+      grantGeneratedCredit: jest.fn(),
       correctGeneratedCredit: jest.fn(),
       expireGeneratedCredit: jest.fn(),
       deleteOperation: jest.fn(),
@@ -281,6 +282,31 @@ describe("OperationsService", () => {
     expect(command.operationId).toBe(operationId);
     expect(command.version).toBe(2);
     expect(command.grantedCreditAmount.toFixed(2)).toBe("25.00");
+  });
+
+  it("libera o crédito antes da liquidação sem encerrar a operação", async () => {
+    repository.grantGeneratedCredit.mockResolvedValue({
+      ...record(),
+      status: OperationStatus.OPEN,
+      version: 2,
+    });
+    await service.grantGeneratedCredit(
+      userId,
+      operationId,
+      { version: 1, grantedCreditAmount: "50.00" },
+      idempotencyKey,
+    );
+    expect(repository.grantGeneratedCredit.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        userId,
+        operationId,
+        version: 1,
+        idempotencyKey,
+      }),
+    );
+    expect(
+      repository.grantGeneratedCredit.mock.calls[0]?.[0].grantedCreditAmount,
+    ).toEqual(new Prisma.Decimal("50.00"));
   });
 
   it("finaliza a geradora quando o crédito disponível foi perdido", async () => {
