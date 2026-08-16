@@ -24,6 +24,7 @@ import { ListOperationsDto } from "./dto/list-operations.dto";
 import { SettleOperationDto } from "./dto/settle-operation.dto";
 import { CorrectGeneratedCreditDto } from "./dto/correct-generated-credit.dto";
 import { GrantGeneratedCreditDto } from "./dto/grant-generated-credit.dto";
+import { RecordEarlyWinsDto } from "./dto/record-early-wins.dto";
 import {
   OPERATIONS_REPOSITORY,
   OperationAccountError,
@@ -236,6 +237,39 @@ export class OperationsService {
             })),
             idempotencyKey,
             requestHash: this.hash(payload),
+          }),
+        ),
+      ),
+    };
+  }
+
+  async recordEarlyWins(
+    userId: string,
+    id: string,
+    dto: RecordEarlyWinsDto,
+    idempotencyKey: string,
+  ) {
+    this.assertIdempotencyKey(idempotencyKey);
+    if (new Set(dto.legIds).size !== dto.legIds.length)
+      throw new UnprocessableEntityException({
+        code: "INVALID_EARLY_WINS",
+        message: "Selecione cada linha apenas uma vez.",
+      });
+    return {
+      operation: this.response(
+        await this.execute(() =>
+          this.repository.recordEarlyWins({
+            userId,
+            operationId: id,
+            version: dto.version,
+            legIds: dto.legIds,
+            idempotencyKey,
+            requestHash: this.hash([
+              "RECORD_EARLY_WINS",
+              id,
+              dto.version,
+              dto.legIds,
+            ]),
           }),
         ),
       ),

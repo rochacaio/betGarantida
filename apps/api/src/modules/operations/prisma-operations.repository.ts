@@ -137,6 +137,8 @@ export class PrismaOperationsRepository implements OperationsRepository {
             old.generatedCredit.status !== BetCreditStatus.EXPECTED
           )
             throw new OperationCreditCorrectionUnavailableError();
+          if (old.legs.some((leg) => leg.result !== BetLegResult.PENDING))
+            throw new OperationInvalidSettlementError();
           await this.lockAndValidateAccounts(tx, command, old.legs);
 
           for (const leg of old.legs.filter((item) => !item.usesBetCredit)) {
@@ -289,6 +291,8 @@ export class PrismaOperationsRepository implements OperationsRepository {
             operation.generatedCredit?.status === BetCreditStatus.CONSUMED
           )
             throw new OperationDeleteCreditInUseError();
+          if (operation.legs.some((leg) => leg.result !== BetLegResult.PENDING))
+            throw new OperationInvalidSettlementError();
           await this.lockAccountIds(
             tx,
             input.userId,
@@ -398,6 +402,10 @@ export class PrismaOperationsRepository implements OperationsRepository {
           if (
             byId.size !== operation.legs.length ||
             operation.legs.some((leg) => !byId.has(leg.id)) ||
+            operation.legs.some(
+              (leg) =>
+                leg.result === BetLegResult.WON && byId.get(leg.id) !== "WON",
+            ) ||
             !input.legs.some((leg) => leg.result === "WON") ||
             (operation.generatesBetCredit &&
               operation.generatedCredit?.status === BetCreditStatus.EXPECTED &&
@@ -431,7 +439,7 @@ export class PrismaOperationsRepository implements OperationsRepository {
                     .mul(leg.cashbackPercent)
                     .div(100)
                     .toDecimalPlaces(2);
-            if (payout.gt(0))
+            if (payout.gt(0) && leg.result !== BetLegResult.WON)
               await this.walletEffect(
                 tx,
                 input.userId,
@@ -557,6 +565,99 @@ export class PrismaOperationsRepository implements OperationsRepository {
             input.idempotencyKey,
             input.requestHash,
             "SETTLE",
+          );
+          return tx.operation.findUniqueOrThrow({
+            where: { id: operation.id },
+            include,
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    );
+  }
+
+  recordEarlyWins(input: {
+    userId: string;
+    operationId: string;
+    version: number;
+    legIds: string[];
+    idempotencyKey: string;
+    requestHash: string;
+  }) {
+    return this.serializable(() =>
+      this.prisma.$transaction(
+        async (tx) => {
+          const replay = await this.idempotentReplay(
+            tx,
+            input.userId,
+            input.idempotencyKey,
+            input.requestHash,
+          );
+          if (replay) return replay;
+          await this.lockOperation(tx, input.userId, input.operationId);
+          const operation = await tx.operation.findFirst({
+            where: { id: input.operationId, userId: input.userId },
+            include,
+          });
+          if (!operation) throw new OperationNotFoundError();
+          if (operation.status !== OperationStatus.OPEN)
+            throw new OperationNotOpenError();
+          if (operation.version !== input.version)
+            throw new OperationStaleVersionError();
+          const selected = operation.legs.filter((leg) =>
+            input.legIds.includes(leg.id),
+          );
+          if (
+            selected.length !== input.legIds.length ||
+            selected.some((leg) => leg.result !== BetLegResult.PENDING)
+          )
+            throw new OperationInvalidSettlementError();
+
+          await this.lockAccountIds(
+            tx,
+            input.userId,
+            selected.map((leg) => leg.bookmakerAccountId),
+          );
+          for (const leg of selected) {
+            await this.walletEffect(
+              tx,
+              input.userId,
+              leg.bookmakerAccountId,
+              operation.id,
+              leg.id,
+              leg.projectedPayout,
+              WalletTransactionType.BET_RETURN,
+              `early-win:${operation.id}:${leg.id}`,
+            );
+            await tx.betLeg.update({
+              where: { id: leg.id },
+              data: { result: BetLegResult.WON },
+            });
+          }
+          await tx.operation.update({
+            where: { id: operation.id },
+            data: { version: { increment: 1 } },
+          });
+          await tx.auditLog.create({
+            data: {
+              userId: input.userId,
+              action: "OPERATION_EARLY_WINS_RECORDED",
+              resourceType: "OPERATION",
+              resourceId: operation.id,
+              before: { version: operation.version },
+              after: {
+                version: operation.version + 1,
+                earlyWonLegIds: input.legIds,
+              },
+            },
+          });
+          await this.recordMutation(
+            tx,
+            input.userId,
+            operation.id,
+            input.idempotencyKey,
+            input.requestHash,
+            "RECORD_EARLY_WINS",
           );
           return tx.operation.findUniqueOrThrow({
             where: { id: operation.id },

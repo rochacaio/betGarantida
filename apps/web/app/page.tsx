@@ -47,6 +47,7 @@ type Leg = {
   cashback: number;
   increase: number;
   result: "PENDING" | "WON" | "LOST";
+  persistedResult?: "PENDING" | "WON" | "LOST";
   usesBetCredit?: boolean;
   usesFreeBetCredit?: boolean;
   creditSourceSurebetId?: string;
@@ -133,6 +134,7 @@ const mapOperation = (item: ApiOperation): Surebet => ({
     cashback: Number(leg.cashbackPercent),
     increase: Number(leg.increasePercent),
     result: leg.result,
+    persistedResult: leg.result,
     usesBetCredit: leg.usesBetCredit,
     usesFreeBetCredit: leg.usesFreeBetCredit,
     creditSourceSurebetId: leg.betCreditId ?? undefined,
@@ -1752,6 +1754,7 @@ function Surebets({
   onDelete,
   onCreditLost,
   onCreditGranted,
+  onEarlyWins,
 }: {
   surebets: Surebet[];
   bookmakers: Bookmaker[];
@@ -1760,6 +1763,7 @@ function Surebets({
   onDelete: (s: Surebet) => Promise<void>;
   onCreditLost: (s: Surebet) => Promise<void>;
   onCreditGranted: (s: Surebet) => Promise<void>;
+  onEarlyWins: (s: Surebet, legIds: string[]) => Promise<void>;
 }) {
   const [editing, setEditing] = useState<Surebet>();
   return (
@@ -1837,6 +1841,10 @@ function Surebets({
                 await save(updated, true);
                 setEditing(undefined);
               }}
+              onEarlyWins={async (surebet, legIds) => {
+                await onEarlyWins(surebet, legIds);
+                setEditing(undefined);
+              }}
               cancel={() => setEditing(undefined)}
             />
           </div>
@@ -1889,6 +1897,7 @@ function LegRow({
   remove: () => void;
 }) {
   const b = bookmakers.find((x) => x.id === leg.bookmakerId);
+  const earlyWinRecorded = leg.persistedResult === "WON";
   const layLiability =
     leg.betType === "LAY" && leg.stake !== "" && leg.odd !== ""
       ? Number(leg.stake) * (Number(leg.odd) - 1)
@@ -2120,6 +2129,7 @@ function LegRow({
               <button
                 type="button"
                 className={leg.result === "WON" ? "won active" : "won"}
+                disabled={earlyWinRecorded}
                 onClick={() => update({ result: "WON" })}
               >
                 ✓ Green
@@ -2127,11 +2137,13 @@ function LegRow({
               <button
                 type="button"
                 className={leg.result === "LOST" ? "lost active" : "lost"}
+                disabled={earlyWinRecorded}
                 onClick={() => update({ result: "LOST" })}
               >
                 × Red
               </button>
             </div>
+            {earlyWinRecorded && <small>Green antecipado já creditado</small>}
           </div>
         )}
       </div>
@@ -2144,6 +2156,7 @@ function Editor({
   surebets,
   editing,
   onSave,
+  onEarlyWins,
   cancel,
   embedded = false,
 }: {
@@ -2151,6 +2164,7 @@ function Editor({
   surebets: Surebet[];
   editing?: Surebet;
   onSave: (s: Surebet) => Promise<void>;
+  onEarlyWins?: (s: Surebet, legIds: string[]) => Promise<void>;
   cancel: () => void;
   embedded?: boolean;
 }) {
@@ -2193,6 +2207,9 @@ function Editor({
   const [expectedBetCredit, setExpectedBetCredit] = useState(
     editing?.expectedBetCredit ?? 0,
   );
+  const pendingEarlyWinIds = legs
+    .filter((leg) => leg.persistedResult === "PENDING" && leg.result === "WON")
+    .map((leg) => leg.id);
   const creditSources = surebets.filter(
     (s) =>
       s.generatedCreditId &&
@@ -2570,9 +2587,21 @@ function Editor({
             <button className="secondary" onClick={cancel}>
               Cancelar
             </button>
-            <button className="primary" onClick={save}>
-              Salvar alterações
-            </button>
+            {!legs.some((leg) => leg.persistedResult === "WON") && (
+              <button className="primary" onClick={save}>
+                Salvar alterações
+              </button>
+            )}
+            {editing?.status === "OPEN" &&
+              pendingEarlyWinIds.length > 0 &&
+              onEarlyWins && (
+                <button
+                  className="early-win-button"
+                  onClick={() => void onEarlyWins(editing, pendingEarlyWinIds)}
+                >
+                  Salvar green antecipado
+                </button>
+              )}
           </div>
         </div>
       )}
@@ -2929,6 +2958,24 @@ export default function Home() {
       );
     }
   };
+  const recordEarlyWins = async (surebet: Surebet, legIds: string[]) => {
+    try {
+      await operationsApi.recordEarlyWins(surebet, legIds);
+      await refresh();
+      showToast(
+        "success",
+        "Green antecipado registrado",
+        "O retorno foi creditado na casa e as outras linhas continuam em aberto.",
+      );
+    } catch (failure) {
+      showToast(
+        "error",
+        "Não foi possível registrar o green",
+        errorMessage(failure, "Tente novamente."),
+      );
+      throw failure;
+    }
+  };
   const body = (() => {
     if (screen === "dashboard")
       return (
@@ -2959,6 +3006,7 @@ export default function Home() {
           onDelete={deleteSurebet}
           onCreditLost={markCreditAsLost}
           onCreditGranted={markCreditAsGranted}
+          onEarlyWins={recordEarlyWins}
         />
       );
     return (

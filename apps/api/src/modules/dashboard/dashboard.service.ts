@@ -109,7 +109,7 @@ export class DashboardService {
         SELECT a."id", COALESCE(a."nickname", a."name") AS name,
           a."cached_balance" AS available,
           COALESCE((SELECT SUM(l."risk_amount") FROM "bet_legs" l JOIN "operations" o ON o."id" = l."operation_id"
-            WHERE l."bookmaker_account_id" = a."id" AND o."status" = 'OPEN' AND l."uses_bet_credit" = false), 0)::numeric AS open_stake,
+            WHERE l."bookmaker_account_id" = a."id" AND o."status" = 'OPEN' AND l."result" = 'PENDING' AND l."uses_bet_credit" = false), 0)::numeric AS open_stake,
           COALESCE((SELECT SUM(w."amount") FROM "wallet_transactions" w
             WHERE w."bookmaker_account_id" = a."id" AND (
               (w."type" = 'BONUS_RECEIVED'

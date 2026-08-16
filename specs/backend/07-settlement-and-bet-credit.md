@@ -13,6 +13,19 @@ Regras da primeira versão:
   responsabilidade e credita o ganho líquido de comissão;
 - retornos vencedores são creditados uma única vez.
 
+## Green antecipado e duplo green
+
+`POST /operations/:id/early-wins` registra uma ou mais linhas `PENDING` como
+`WON` sem encerrar a operação. O retorno dessas linhas é creditado imediatamente
+na casa, elas deixam de compor o saldo em apostas e as demais permanecem
+pendentes. A ação é idempotente e uma linha já paga não pode ser alterada para
+red.
+
+Na liquidação final, todas as linhas são informadas normalmente. Linhas pagas
+antecipadamente participam do resultado realizado, mas seu retorno não é
+creditado novamente. Assim, pagamentos antecipados de duas ou mais casas podem
+produzir duplo green sem duplicar lançamentos.
+
 ## Operação geradora
 
 Ao criar com `generatesBetCredit=true`, existe um crédito `EXPECTED`.

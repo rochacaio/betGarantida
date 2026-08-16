@@ -92,6 +92,15 @@ export const operationsApi = {
         grantedCreditAmount,
       }),
     }),
+  recordEarlyWins: (
+    operation: { id: string; version: number },
+    legIds: string[],
+  ) =>
+    api<{ operation: ApiOperation }>(`/operations/${operation.id}/early-wins`, {
+      method: "POST",
+      headers: commandHeaders(),
+      body: JSON.stringify({ version: operation.version, legIds }),
+    }),
   correctGeneratedCredit: (
     operation: { id: string; version: number },
     grantedCreditAmount: string,

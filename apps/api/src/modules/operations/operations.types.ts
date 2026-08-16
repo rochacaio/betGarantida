@@ -85,6 +85,14 @@ export interface OperationsRepository {
     idempotencyKey: string;
     requestHash: string;
   }): Promise<OperationRecord>;
+  recordEarlyWins(input: {
+    userId: string;
+    operationId: string;
+    version: number;
+    legIds: string[];
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<OperationRecord>;
   grantGeneratedCredit(input: {
     userId: string;
     operationId: string;

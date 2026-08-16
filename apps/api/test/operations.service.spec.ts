@@ -105,6 +105,7 @@ describe("OperationsService", () => {
       list: jest.fn(),
       cancel: jest.fn(),
       settle: jest.fn(),
+      recordEarlyWins: jest.fn(),
       grantGeneratedCredit: jest.fn(),
       correctGeneratedCredit: jest.fn(),
       expireGeneratedCredit: jest.fn(),
@@ -429,6 +430,34 @@ describe("OperationsService", () => {
         operationId,
         version: 1,
         idempotencyKey,
+      }),
+    );
+  });
+
+  it("registra green antecipado sem finalizar a operação", async () => {
+    repository.recordEarlyWins.mockResolvedValue({
+      ...record(),
+      status: OperationStatus.OPEN,
+      version: 2,
+      legs: record().legs.map((leg, index) => ({
+        ...leg,
+        result: index === 0 ? BetLegResult.WON : BetLegResult.PENDING,
+      })),
+    });
+    const legId = record().legs[0].id;
+    const result = await service.recordEarlyWins(
+      userId,
+      operationId,
+      { version: 1, legIds: [legId] },
+      idempotencyKey,
+    );
+    expect(result.operation.status).toBe(OperationStatus.OPEN);
+    expect(repository.recordEarlyWins.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        userId,
+        operationId,
+        version: 1,
+        legIds: [legId],
       }),
     );
   });

@@ -80,6 +80,7 @@ export class PrismaBookmakerAccountsRepository
       where: {
         bookmakerAccountId: { in: accounts.map((account) => account.id) },
         usesBetCredit: false,
+        result: "PENDING",
         operation: { userId, status: OperationStatus.OPEN },
       },
       _sum: { riskAmount: true },
