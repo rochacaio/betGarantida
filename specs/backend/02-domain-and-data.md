@@ -46,7 +46,11 @@ OPEN -> CANCELLED
 
 ### BetLeg
 
-`id`, `operationId`, `bookmakerAccountId`, `position`, `betType`, `stake`, `riskAmount`, `odd`, `commissionPercent`, `cashbackPercent`, `increasePercent`, `usesBetCredit`, `usesFreeBetCredit`, `result`, snapshots de cálculo e timestamps.
+`id`, `operationId`, `bookmakerAccountId`, `position`, `selectionName?`, `betType`, `stake`, `riskAmount`, `odd`, `commissionPercent`, `cashbackPercent`, `increasePercent`, `usesBetCredit`, `usesFreeBetCredit`, `result`, snapshots de cálculo e timestamps.
+
+`selectionName` é um texto opcional de até 160 caracteres para identificar o
+mercado da linha, como `Vitória Fluminense`, `Empate` ou `Vitória Criciúma`.
+Linhas antigas permanecem válidas com valor nulo.
 
 `betType` pode ser `BACK` ou `LAY`. Em `BACK`, `riskAmount = stake`. Em `LAY`,
 `stake` representa o ganho bruto oferecido na bolsa e `riskAmount` representa a

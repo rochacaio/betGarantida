@@ -58,4 +58,17 @@ describe("Initial domain migration", () => {
     expect(layMigration).toContain('SET "risk_amount" = "stake"');
     expect(layMigration).toContain('ALTER COLUMN "risk_amount" SET NOT NULL');
   });
+
+  it("adds an optional selection name without changing existing legs", () => {
+    const nameMigration = readFileSync(
+      join(
+        migrationsRoot,
+        "20260818000000_add_bet_leg_selection_name",
+        "migration.sql",
+      ),
+      "utf8",
+    );
+    expect(nameMigration).toContain('ADD COLUMN "selection_name" VARCHAR(160)');
+    expect(nameMigration).not.toContain("NOT NULL");
+  });
 });

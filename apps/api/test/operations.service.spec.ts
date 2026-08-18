@@ -71,6 +71,7 @@ function record() {
       bookmakerAccountId: leg.bookmakerAccountId,
       betCreditId: null,
       position,
+      selectionName: null,
       betType: "BACK" as const,
       stake: new Prisma.Decimal(leg.stake),
       riskAmount: new Prisma.Decimal(leg.stake),
@@ -101,6 +102,7 @@ describe("OperationsService", () => {
     repository = {
       create: jest.fn(),
       update: jest.fn(),
+      updateLegNames: jest.fn(),
       findById: jest.fn(),
       list: jest.fn(),
       cancel: jest.fn(),
@@ -212,6 +214,36 @@ describe("OperationsService", () => {
     expect(lay?.stake.toFixed(2)).toBe("25.74");
     expect(lay?.riskAmount.toFixed(2)).toBe("169.88");
     expect(lay?.effectiveOdd.toFixed(3)).toBe("1.148");
+  });
+
+  it("persiste o nome opcional de cada linha", async () => {
+    repository.create.mockResolvedValue(record());
+    const input = dto();
+    input.legs[0].selectionName = "Vitória Fluminense";
+    await service.create(userId, input, idempotencyKey);
+    expect(repository.create.mock.calls[0]?.[0].legs[0]?.selectionName).toBe(
+      "Vitória Fluminense",
+    );
+    expect(repository.create.mock.calls[0]?.[0].legs[1]?.selectionName).toBe(
+      undefined,
+    );
+  });
+
+  it("atualiza somente os nomes das linhas de uma operação aberta", async () => {
+    repository.updateLegNames.mockResolvedValue(record());
+    const legs = record().legs.map((leg, index) => ({
+      legId: leg.id,
+      selectionName: index === 0 ? "Empate" : "Vitória Criciúma",
+    }));
+    await service.updateLegNames(
+      userId,
+      operationId,
+      { version: 1, legs },
+      idempotencyKey,
+    );
+    expect(repository.updateLegNames.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ userId, operationId, version: 1, legs }),
+    );
   });
 
   it("não permite usar crédito de aposta em uma linha Lay", async () => {

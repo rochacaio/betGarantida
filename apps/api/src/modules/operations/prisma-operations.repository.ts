@@ -225,6 +225,68 @@ export class PrismaOperationsRepository implements OperationsRepository {
     );
   }
 
+  updateLegNames(input: {
+    userId: string;
+    operationId: string;
+    version: number;
+    legs: Array<{ legId: string; selectionName: string }>;
+    idempotencyKey: string;
+    requestHash: string;
+  }) {
+    return this.serializable(() =>
+      this.prisma.$transaction(
+        async (tx) => {
+          const replay = await this.idempotentReplay(
+            tx,
+            input.userId,
+            input.idempotencyKey,
+            input.requestHash,
+          );
+          if (replay) return replay;
+          await this.lockOperation(tx, input.userId, input.operationId);
+          const operation = await tx.operation.findFirst({
+            where: { id: input.operationId, userId: input.userId },
+            include,
+          });
+          if (!operation) throw new OperationNotFoundError();
+          if (operation.status !== OperationStatus.OPEN)
+            throw new OperationNotOpenError();
+          if (operation.version !== input.version)
+            throw new OperationStaleVersionError();
+          const ids = new Set(operation.legs.map((leg) => leg.id));
+          if (
+            input.legs.length !== operation.legs.length ||
+            input.legs.some((leg) => !ids.has(leg.legId))
+          )
+            throw new OperationInvalidSettlementError();
+
+          for (const leg of input.legs)
+            await tx.betLeg.update({
+              where: { id: leg.legId },
+              data: { selectionName: leg.selectionName || null },
+            });
+          await tx.operation.update({
+            where: { id: operation.id },
+            data: { version: { increment: 1 } },
+          });
+          await this.recordMutation(
+            tx,
+            input.userId,
+            operation.id,
+            input.idempotencyKey,
+            input.requestHash,
+            "UPDATE_LEG_NAMES",
+          );
+          return tx.operation.findUniqueOrThrow({
+            where: { id: operation.id },
+            include,
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    );
+  }
+
   findById(userId: string, operationId: string) {
     return this.prisma.operation.findFirst({
       where: { id: operationId, userId },

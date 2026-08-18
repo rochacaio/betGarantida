@@ -36,6 +36,7 @@ export type BetCreditStatus =
   | "CANCELLED";
 
 export interface OperationLegInput {
+  selectionName?: string;
   bookmakerAccountId: string;
   betType?: BetType;
   stake: string;

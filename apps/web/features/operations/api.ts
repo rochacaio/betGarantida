@@ -2,6 +2,7 @@ import { api, commandHeaders } from "../../lib/api/client";
 
 export type ApiLeg = {
   id: string;
+  selectionName: string | null;
   bookmakerAccountId: string;
   betCreditId: string | null;
   betType: "BACK" | "LAY";
@@ -44,6 +45,7 @@ export type OperationInput = {
   generatesBetCredit: boolean;
   expectedBetCredit?: string;
   legs: Array<{
+    selectionName?: string;
     bookmakerAccountId: string;
     betType: "BACK" | "LAY";
     stake: string;
@@ -69,6 +71,15 @@ export const operationsApi = {
       method: "PATCH",
       headers: commandHeaders(),
       body: JSON.stringify({ ...input, version }),
+    }),
+  updateLegNames: (
+    operation: { id: string; version: number },
+    legs: Array<{ legId: string; selectionName: string }>,
+  ) =>
+    api<{ operation: ApiOperation }>(`/operations/${operation.id}/leg-names`, {
+      method: "PATCH",
+      headers: commandHeaders(),
+      body: JSON.stringify({ version: operation.version, legs }),
     }),
   delete: (operation: { id: string; version: number }) =>
     api<{ operation: ApiOperation }>(`/operations/${operation.id}`, {

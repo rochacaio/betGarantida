@@ -38,6 +38,7 @@ type Bookmaker = {
 };
 type Leg = {
   id: string;
+  selectionName: string;
   bookmakerId: string;
   betType: "BACK" | "LAY";
   stake: number | "";
@@ -125,6 +126,7 @@ const mapOperation = (item: ApiOperation): Surebet => ({
       : Number(item.combinedPromotionProfit),
   legs: item.legs.map((leg) => ({
     id: leg.id,
+    selectionName: leg.selectionName ?? "",
     bookmakerId: leg.bookmakerAccountId,
     betType: leg.betType ?? "BACK",
     stake: Number(leg.stake),
@@ -1910,6 +1912,15 @@ function LegRow({
     <div className="leg-row-wrap">
       <div className="leg-row">
         <div className="leg-number">{String.fromCharCode(65 + index)}</div>
+        <Field label="Nome da linha">
+          <input
+            type="text"
+            maxLength={160}
+            placeholder="Ex.: Vitória Fluminense"
+            value={leg.selectionName}
+            onChange={(event) => update({ selectionName: event.target.value })}
+          />
+        </Field>
         <Field label="Casa de aposta">
           <select
             value={leg.bookmakerId}
@@ -2179,6 +2190,7 @@ function Editor({
       : [
           {
             id: uid(),
+            selectionName: "",
             bookmakerId: "",
             betType: "BACK",
             stake: "",
@@ -2190,6 +2202,7 @@ function Editor({
           },
           {
             id: uid(),
+            selectionName: "",
             bookmakerId: "",
             betType: "BACK",
             stake: "",
@@ -2210,6 +2223,11 @@ function Editor({
   const pendingEarlyWinIds = legs
     .filter((leg) => leg.persistedResult === "PENDING" && leg.result === "WON")
     .map((leg) => leg.id);
+  const onlyNamesEditable =
+    editing?.status === "OPEN" &&
+    (legs.some((leg) => leg.persistedResult === "WON") ||
+      (editing.generatedCreditStatus !== undefined &&
+        editing.generatedCreditStatus !== "EXPECTED"));
   const creditSources = surebets.filter(
     (s) =>
       s.generatedCreditId &&
@@ -2587,11 +2605,9 @@ function Editor({
             <button className="secondary" onClick={cancel}>
               Cancelar
             </button>
-            {!legs.some((leg) => leg.persistedResult === "WON") && (
-              <button className="primary" onClick={save}>
-                Salvar alterações
-              </button>
-            )}
+            <button className="primary" onClick={save}>
+              {onlyNamesEditable ? "Salvar nomes" : "Salvar alterações"}
+            </button>
             {editing?.status === "OPEN" &&
               pendingEarlyWinIds.length > 0 &&
               onEarlyWins && (
@@ -2709,6 +2725,7 @@ function Editor({
                   ...current,
                   {
                     id: uid(),
+                    selectionName: "",
                     bookmakerId: "",
                     betType: "BACK",
                     stake: "",
@@ -2790,6 +2807,7 @@ export default function Home() {
       ? Number(surebet.expectedBetCredit ?? 0).toFixed(2)
       : undefined,
     legs: surebet.legs.map((leg) => ({
+      selectionName: leg.selectionName.trim() || undefined,
       bookmakerAccountId: leg.bookmakerId,
       betType: leg.betType,
       stake: Number(leg.stake).toFixed(2),
@@ -2830,6 +2848,20 @@ export default function Home() {
       successMessage = surebet.creditGenerated
         ? "Surebet finalizada e crédito disponibilizado."
         : "Surebet finalizada com sucesso.";
+    } else if (
+      previous?.status === "OPEN" &&
+      (previous.legs.some((leg) => leg.result === "WON") ||
+        (previous.generatedCreditStatus !== undefined &&
+          previous.generatedCreditStatus !== "EXPECTED"))
+    ) {
+      await operationsApi.updateLegNames(
+        previous,
+        surebet.legs.map((leg) => ({
+          legId: leg.id,
+          selectionName: leg.selectionName.trim(),
+        })),
+      );
+      successMessage = "Nomes das linhas atualizados com sucesso.";
     } else if (previous) {
       await operationsApi.update(previous.id, previous.version, input(surebet));
       successMessage = "Alterações salvas com sucesso.";

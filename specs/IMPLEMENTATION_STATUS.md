@@ -269,3 +269,15 @@ Status: implementada e validada.
 - Múltiplos pagamentos antecipados são somados normalmente no resultado final,
   permitindo duplo green.
 - Não há alteração de schema nem migration nova para esta extensão.
+
+## Extensão — nome da linha
+
+Status: implementada e validada.
+
+- Cada linha possui identificação textual opcional antes da casa de aposta.
+- O nome não participa de cálculos ou movimentações financeiras.
+- Operações antigas permanecem compatíveis e exibem o campo vazio.
+- Operações abertas permitem editar os nomes; quando os dados financeiros já
+  estão bloqueados, um endpoint específico altera somente os nomes.
+- A migration `20260818000000_add_bet_leg_selection_name` adiciona a coluna
+  opcional `selection_name`.

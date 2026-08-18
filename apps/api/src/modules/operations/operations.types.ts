@@ -1,6 +1,7 @@
 import { BetType, OperationStatus, Prisma } from "@prisma/client";
 
 export interface OperationLegCommand {
+  selectionName?: string;
   bookmakerAccountId: string;
   betCreditId?: string;
   betType: BetType;
@@ -60,6 +61,14 @@ export interface OperationsRepository {
   update(
     command: OperationWriteCommand & { operationId: string; version: number },
   ): Promise<OperationRecord>;
+  updateLegNames(input: {
+    userId: string;
+    operationId: string;
+    version: number;
+    legs: Array<{ legId: string; selectionName: string }>;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<OperationRecord>;
   findById(
     userId: string,
     operationId: string,

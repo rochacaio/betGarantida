@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
   Matches,
 } from "class-validator";
 import { trimString } from "../../auth/dto/transforms";
@@ -14,6 +15,12 @@ const decimal = /^\d{1,17}(\.\d{1,6})?$/;
 const money = /^\d{1,17}(\.\d{1,2})?$/;
 
 export class OperationLegDto {
+  @Transform(trimString)
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  selectionName?: string;
+
   @IsUUID()
   bookmakerAccountId!: string;
 

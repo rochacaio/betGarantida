@@ -42,5 +42,6 @@ describe("Prisma domain schema", () => {
     expect(schema).toContain("CONSUMED");
     expect(schema).toContain("enum BetType {");
     expect(schema).toContain("riskAmount");
+    expect(schema).toContain("selectionName");
   });
 });

@@ -25,6 +25,7 @@ import { SettleOperationDto } from "./dto/settle-operation.dto";
 import { CorrectGeneratedCreditDto } from "./dto/correct-generated-credit.dto";
 import { GrantGeneratedCreditDto } from "./dto/grant-generated-credit.dto";
 import { RecordEarlyWinsDto } from "./dto/record-early-wins.dto";
+import { UpdateLegNamesDto } from "./dto/update-leg-names.dto";
 import {
   OPERATIONS_REPOSITORY,
   OperationAccountError,
@@ -125,6 +126,35 @@ export class OperationsService {
             ...command,
             operationId: id,
             version: dto.version,
+          }),
+        ),
+      ),
+    };
+  }
+
+  async updateLegNames(
+    userId: string,
+    id: string,
+    dto: UpdateLegNamesDto,
+    idempotencyKey: string,
+  ) {
+    this.assertIdempotencyKey(idempotencyKey);
+    if (new Set(dto.legs.map((leg) => leg.legId)).size !== dto.legs.length)
+      throw new UnprocessableEntityException("Linha repetida na atualização.");
+    const legs = dto.legs.map((leg) => ({
+      legId: leg.legId,
+      selectionName: leg.selectionName.trim(),
+    }));
+    return {
+      operation: this.response(
+        await this.execute(() =>
+          this.repository.updateLegNames({
+            userId,
+            operationId: id,
+            version: dto.version,
+            legs,
+            idempotencyKey,
+            requestHash: this.hash(["UPDATE_LEG_NAMES", id, dto.version, legs]),
           }),
         ),
       ),
@@ -418,6 +448,7 @@ export class OperationsService {
       engineVersion: snapshot.engineVersion,
       calculationSnapshot: serializeDecimals(snapshot) as Prisma.InputJsonValue,
       legs: snapshot.legs.map((leg, index) => ({
+        selectionName: dto.legs[index].selectionName || undefined,
         bookmakerAccountId: dto.legs[index].bookmakerAccountId,
         betCreditId: dto.legs[index].betCreditId,
         usesFreeBetCredit: dto.legs[index].usesFreeBetCredit ?? false,

@@ -27,6 +27,7 @@ import { DeleteOperationDto } from "./dto/delete-operation.dto";
 import { ExpireGeneratedCreditDto } from "./dto/expire-generated-credit.dto";
 import { GrantGeneratedCreditDto } from "./dto/grant-generated-credit.dto";
 import { RecordEarlyWinsDto } from "./dto/record-early-wins.dto";
+import { UpdateLegNamesDto } from "./dto/update-leg-names.dto";
 
 @ApiTags("operations")
 @ApiCookieAuth("betgarantida_session")
@@ -72,6 +73,16 @@ export class OperationsController {
     @Headers("idempotency-key") idempotencyKey = "",
   ) {
     return this.operations.update(user.id, id, dto, idempotencyKey);
+  }
+
+  @Patch(":id/leg-names")
+  updateLegNames(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: UpdateLegNamesDto,
+    @Headers("idempotency-key") idempotencyKey = "",
+  ) {
+    return this.operations.updateLegNames(user.id, id, dto, idempotencyKey);
   }
 
   @Post(":id/cancel")
