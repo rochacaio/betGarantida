@@ -590,7 +590,7 @@ function Dashboard({
                 Sobre{" "}
                 {money.format(
                   Number(dashboard?.metrics.contributedCapital ?? 0),
-                )}
+                )}{" "}
                  em depósitos e saldos iniciais
               </small>
             </div>
