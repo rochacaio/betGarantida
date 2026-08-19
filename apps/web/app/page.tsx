@@ -1838,11 +1838,11 @@ function Surebets({
   const todaySurebets = surebets.filter(
     (surebet) => saoPauloDateKey(surebet.createdAt) === todayKey,
   );
-  const dailyReturns = todaySurebets.reduce(
-    (total, surebet) =>
-      total + (surebet.realizedReturn ?? surebet.protectedReturn),
-    0,
-  );
+  const dailyProfitWithoutCredit = todaySurebets
+    .filter(
+      (surebet) => !surebet.legs.some((leg) => leg.usesBetCredit),
+    )
+    .reduce((total, surebet) => total + surebet.profit, 0);
   const pendingCreditStatuses = new Set(["EXPECTED", "AVAILABLE"]);
   const pendingCredits = todaySurebets.reduce(
     (total, surebet) =>
@@ -1910,8 +1910,8 @@ function Surebets({
         <div className="summary-strip surebet-daily-summary">
           <div>
             <span>Ganhos do dia</span>
-            <strong>{money.format(dailyReturns)}</strong>
-            <small>Retornos das bets criadas hoje</small>
+            <strong>{money.format(dailyProfitWithoutCredit)}</strong>
+            <small>Lucro das bets de hoje sem crédito</small>
           </div>
           <div>
             <span>Créditos a converter</span>
