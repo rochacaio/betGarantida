@@ -650,6 +650,20 @@ td:first-child small {
   font-size: 18px;
   margin-top: 5px;
 }
+.surebet-daily-summary {
+  margin-bottom: 24px;
+}
+.surebet-daily-summary small {
+  color: var(--muted);
+  font-size: 9px;
+  margin-top: 4px;
+}
+.surebet-daily-summary .metric-positive {
+  color: var(--green);
+}
+.surebet-daily-summary .metric-negative {
+  color: var(--red);
+}
 .section-heading {
   display: flex;
   align-items: end;
@@ -1704,6 +1718,20 @@ td:first-child small {
   background: #302d16;
   color: #e5d85d;
   white-space: nowrap;
+}
+.status.early_win {
+  background: #143a2a;
+  color: #4af0ac;
+}
+.status.credit_available {
+  background: #303616;
+  color: #dcea57;
+}
+.empty-tab-state {
+  padding: 30px 18px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 11px;
 }
 .credit-decision-backdrop {
   position: fixed;

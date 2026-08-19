@@ -22,8 +22,10 @@ export type ApiOperation = {
   sequenceNumber: number;
   eventName: string;
   status: "OPEN" | "WAITING_CREDIT_USE" | "SETTLED" | "CANCELLED";
+  protectedReturn: string;
   projectedProfit: string;
   projectedRoiPercent: string;
+  realizedReturn: string | null;
   realizedProfit: string | null;
   realizedRoiPercent: string | null;
   combinedPromotionProfit: string | null;

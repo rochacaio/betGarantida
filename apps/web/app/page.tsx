@@ -60,7 +60,10 @@ type Surebet = {
   title: string;
   event: string;
   date: string;
+  createdAt: string;
   status: "OPEN" | "WAITING_CREDIT_USE" | "SETTLED";
+  protectedReturn: number;
+  realizedReturn?: number;
   profit: number;
   roi: number;
   legs: Leg[];
@@ -80,6 +83,17 @@ const money = new Intl.NumberFormat("pt-BR", {
 });
 const pct = (value: number) => `${value.toFixed(2).replace(".", ",")}%`;
 const uid = () => crypto.randomUUID();
+const saoPauloDateKey = (value: string | Date) => {
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(value));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+};
 
 const colors = ["#f4c542", "#ff6a2a", "#ec3d57", "#4e8cff", "#a469ff"];
 const mapBookmaker = (item: ApiBookmaker, index: number): Bookmaker => ({
@@ -96,6 +110,7 @@ const mapOperation = (item: ApiOperation): Surebet => ({
   id: item.id,
   title: `Arbitragem #${item.sequenceNumber}`,
   event: item.eventName,
+  createdAt: item.createdAt,
   date: new Date(item.createdAt).toLocaleString("pt-BR", {
     day: "2-digit",
     month: "short",
@@ -103,6 +118,9 @@ const mapOperation = (item: ApiOperation): Surebet => ({
     minute: "2-digit",
   }),
   status: item.status === "CANCELLED" ? "SETTLED" : item.status,
+  protectedReturn: Number(item.protectedReturn),
+  realizedReturn:
+    item.realizedReturn === null ? undefined : Number(item.realizedReturn),
   profit: Number(item.realizedProfit ?? item.projectedProfit),
   roi: Number(item.realizedRoiPercent ?? item.projectedRoiPercent),
   version: item.version,
@@ -591,7 +609,7 @@ function Dashboard({
                 {money.format(
                   Number(dashboard?.metrics.contributedCapital ?? 0),
                 )}{" "}
-                 em depósitos e saldos iniciais
+                em depósitos e saldos iniciais
               </small>
             </div>
           </article>
@@ -767,12 +785,24 @@ function SurebetTable({
   onCreditLost?: (s: Surebet) => void;
   onCreditGranted?: (s: Surebet) => void;
 }) {
-  const statusLabel = (status: Surebet["status"]) =>
-    status === "OPEN"
-      ? "Em aberto"
-      : status === "WAITING_CREDIT_USE"
-        ? "Aguardando uso do crédito"
-        : "Liquidada";
+  const visualStatus = (surebet: Surebet) => {
+    const hasEarlyWin = surebet.legs.some(
+      (leg) => leg.persistedResult === "WON",
+    );
+    const hasReleasedCredit =
+      surebet.generatedCreditStatus === "AVAILABLE" ||
+      surebet.generatedCreditStatus === "CONSUMED";
+    if (surebet.status === "WAITING_CREDIT_USE")
+      return { key: "waiting_credit_use", label: "Aguardando uso do crédito" };
+    if (surebet.status === "SETTLED")
+      return { key: "settled", label: "Liquidada" };
+    if (hasEarlyWin && hasReleasedCredit)
+      return { key: "early_win", label: "Green + crédito liberado" };
+    if (hasEarlyWin) return { key: "early_win", label: "Green antecipado" };
+    if (hasReleasedCredit)
+      return { key: "credit_available", label: "Crédito liberado" };
+    return { key: "open", label: "Em aberto" };
+  };
   return (
     <div className="table-wrap surebet-table-wrap">
       <table>
@@ -790,6 +820,7 @@ function SurebetTable({
         <tbody>
           {surebets.map((s) => {
             const displayedProfit = s.profit;
+            const displayedStatus = visualStatus(s);
             return (
               <tr key={s.id}>
                 <td>
@@ -867,8 +898,8 @@ function SurebetTable({
                 </td>
                 <td>{s.status === "OPEN" ? "—" : pct(s.roi)}</td>
                 <td>
-                  <span className={`status ${s.status.toLowerCase()}`}>
-                    {statusLabel(s.status)}
+                  <span className={`status ${displayedStatus.key}`}>
+                    {displayedStatus.label}
                   </span>
                 </td>
                 <td>
@@ -1768,6 +1799,102 @@ function Surebets({
   onEarlyWins: (s: Surebet, legIds: string[]) => Promise<void>;
 }) {
   const [editing, setEditing] = useState<Surebet>();
+  type SurebetTab =
+    | "ALL"
+    | "OPEN"
+    | "EARLY_WIN"
+    | "CREDIT_AVAILABLE"
+    | "WAITING_CREDIT_USE"
+    | "SETTLED";
+  const [activeTab, setActiveTab] = useState<SurebetTab>("ALL");
+  const matchesTab = (surebet: Surebet, tab: SurebetTab) => {
+    if (tab === "ALL") return true;
+    if (tab === "OPEN") return surebet.status === "OPEN";
+    if (tab === "EARLY_WIN")
+      return (
+        surebet.status === "OPEN" &&
+        surebet.legs.some((leg) => leg.persistedResult === "WON")
+      );
+    if (tab === "CREDIT_AVAILABLE")
+      return (
+        surebet.status === "OPEN" &&
+        (surebet.generatedCreditStatus === "AVAILABLE" ||
+          surebet.generatedCreditStatus === "CONSUMED")
+      );
+    return surebet.status === tab;
+  };
+  const tabs: Array<{ key: SurebetTab; label: string }> = [
+    { key: "ALL", label: "Todas" },
+    { key: "OPEN", label: "Em aberto" },
+    { key: "EARLY_WIN", label: "Green antecipado" },
+    { key: "CREDIT_AVAILABLE", label: "Crédito liberado" },
+    { key: "WAITING_CREDIT_USE", label: "Aguardando crédito" },
+    { key: "SETTLED", label: "Liquidadas" },
+  ];
+  const filteredSurebets = surebets.filter((surebet) =>
+    matchesTab(surebet, activeTab),
+  );
+  const todayKey = saoPauloDateKey(new Date());
+  const todaySurebets = surebets.filter(
+    (surebet) => saoPauloDateKey(surebet.createdAt) === todayKey,
+  );
+  const dailyReturns = todaySurebets.reduce(
+    (total, surebet) =>
+      total + (surebet.realizedReturn ?? surebet.protectedReturn),
+    0,
+  );
+  const pendingCreditStatuses = new Set(["EXPECTED", "AVAILABLE"]);
+  const pendingCredits = todaySurebets.reduce(
+    (total, surebet) =>
+      total +
+      (surebet.generatesBetCredit &&
+      surebet.generatedCreditStatus &&
+      pendingCreditStatuses.has(surebet.generatedCreditStatus)
+        ? (surebet.expectedBetCredit ?? 0)
+        : 0),
+    0,
+  );
+  const linkedCreditConsumers = todaySurebets.filter((surebet) =>
+    surebet.legs.some(
+      (leg) =>
+        leg.usesBetCredit &&
+        !leg.usesFreeBetCredit &&
+        Boolean(leg.creditSourceSurebetId),
+    ),
+  );
+  const convertedCreditWithoutLoss = linkedCreditConsumers.reduce(
+    (total, surebet) => total + surebet.profit,
+    0,
+  );
+  const sourceByCreditId = new Map(
+    surebets
+      .filter((surebet) => surebet.generatedCreditId)
+      .map((surebet) => [surebet.generatedCreditId!, surebet]),
+  );
+  const convertedCreditWithLoss = linkedCreditConsumers.reduce(
+    (total, consumer) => {
+      if (consumer.combinedPromotionProfit !== undefined)
+        return total + consumer.combinedPromotionProfit;
+
+      const sourceIds = new Set(
+        consumer.legs
+          .filter(
+            (leg) =>
+              leg.usesBetCredit &&
+              !leg.usesFreeBetCredit &&
+              leg.creditSourceSurebetId,
+          )
+          .map((leg) => leg.creditSourceSurebetId!),
+      );
+      const qualificationResult = [...sourceIds].reduce(
+        (sourceTotal, sourceId) =>
+          sourceTotal + (sourceByCreditId.get(sourceId)?.profit ?? 0),
+        0,
+      );
+      return total + consumer.profit + qualificationResult;
+    },
+    0,
+  );
   return (
     <>
       <Topbar
@@ -1780,18 +1907,52 @@ function Surebets({
         }
       />
       <section className="content">
+        <div className="summary-strip surebet-daily-summary">
+          <div>
+            <span>Ganhos do dia</span>
+            <strong>{money.format(dailyReturns)}</strong>
+            <small>Retornos das bets criadas hoje</small>
+          </div>
+          <div>
+            <span>Créditos a converter</span>
+            <strong>{money.format(pendingCredits)}</strong>
+            <small>Créditos esperados ou disponíveis</small>
+          </div>
+          <div>
+            <span>Crédito convertido sem o red</span>
+            <strong>{money.format(convertedCreditWithoutLoss)}</strong>
+            <small>Resultado das conversões de hoje</small>
+          </div>
+          <div>
+            <span>Crédito convertido com o red</span>
+            <strong
+              className={
+                convertedCreditWithLoss < 0 ? "metric-negative" : "metric-positive"
+              }
+            >
+              {money.format(convertedCreditWithLoss)}
+            </strong>
+            <small>Conversão menos o custo da geradora</small>
+          </div>
+        </div>
         <div className="tabs">
-          <button className="active">
-            Todas <span>{surebets.length}</span>
-          </button>
-          <button>
-            Em aberto{" "}
-            <span>{surebets.filter((s) => s.status === "OPEN").length}</span>
-          </button>
-          <button>
-            Liquidadas{" "}
-            <span>{surebets.filter((s) => s.status === "SETTLED").length}</span>
-          </button>
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={activeTab === tab.key ? "active" : ""}
+              aria-pressed={activeTab === tab.key}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}{" "}
+              <span>
+                {
+                  surebets.filter((surebet) => matchesTab(surebet, tab.key))
+                    .length
+                }
+              </span>
+            </button>
+          ))}
         </div>
         <article className="panel list-panel">
           <div className="filters">
@@ -1802,7 +1963,7 @@ function Surebets({
             <button className="secondary">Filtros</button>
           </div>
           <SurebetTable
-            surebets={surebets}
+            surebets={filteredSurebets}
             bookmakers={bookmakers}
             onEdit={setEditing}
             onDelete={(surebet) => {
@@ -1823,6 +1984,11 @@ function Surebets({
             }}
             onCreditGranted={(surebet) => void onCreditGranted(surebet)}
           />
+          {filteredSurebets.length === 0 && (
+            <div className="empty-tab-state">
+              Nenhuma entrada encontrada neste status.
+            </div>
+          )}
         </article>
       </section>
       {editing && (
@@ -2472,7 +2638,10 @@ function Editor({
         title: editing?.title ?? "Nova arbitragem",
         event: event.trim(),
         date: editing?.date ?? "agora",
+        createdAt: editing?.createdAt ?? new Date().toISOString(),
         status: editing?.status ?? "OPEN",
+        protectedReturn,
+        realizedReturn: editing?.realizedReturn,
         profit,
         roi,
         legs,
