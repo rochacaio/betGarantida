@@ -1840,7 +1840,9 @@ function Surebets({
   );
   const dailyProfitWithoutCredit = todaySurebets
     .filter(
-      (surebet) => !surebet.legs.some((leg) => leg.usesBetCredit),
+      (surebet) =>
+        !surebet.generatesBetCredit &&
+        !surebet.legs.some((leg) => leg.usesBetCredit),
     )
     .reduce((total, surebet) => total + surebet.profit, 0);
   const pendingCreditStatuses = new Set(["EXPECTED", "AVAILABLE"]);
@@ -1854,15 +1856,10 @@ function Surebets({
         : 0),
     0,
   );
-  const linkedCreditConsumers = todaySurebets.filter((surebet) =>
-    surebet.legs.some(
-      (leg) =>
-        leg.usesBetCredit &&
-        !leg.usesFreeBetCredit &&
-        Boolean(leg.creditSourceSurebetId),
-    ),
+  const creditConsumers = todaySurebets.filter((surebet) =>
+    surebet.legs.some((leg) => leg.usesBetCredit),
   );
-  const convertedCreditWithoutLoss = linkedCreditConsumers.reduce(
+  const convertedCreditWithoutLoss = creditConsumers.reduce(
     (total, surebet) => total + surebet.profit,
     0,
   );
@@ -1871,7 +1868,7 @@ function Surebets({
       .filter((surebet) => surebet.generatedCreditId)
       .map((surebet) => [surebet.generatedCreditId!, surebet]),
   );
-  const convertedCreditWithLoss = linkedCreditConsumers.reduce(
+  const convertedCreditWithLoss = creditConsumers.reduce(
     (total, consumer) => {
       if (consumer.combinedPromotionProfit !== undefined)
         return total + consumer.combinedPromotionProfit;
@@ -1911,7 +1908,7 @@ function Surebets({
           <div>
             <span>Ganhos do dia</span>
             <strong>{money.format(dailyProfitWithoutCredit)}</strong>
-            <small>Lucro das bets de hoje sem crédito</small>
+            <small>Lucro sem uso ou geração de crédito</small>
           </div>
           <div>
             <span>Créditos a converter</span>
