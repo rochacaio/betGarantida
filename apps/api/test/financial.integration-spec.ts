@@ -82,6 +82,8 @@ run("operações financeiras com PostgreSQL real", () => {
       idempotencyKey: `create:${randomUUID()}`,
       requestHash: "a".repeat(64),
       legs: snapshot.legs.map((leg, index) => ({
+        scenarioId: randomUUID(),
+        groupPosition: 0,
         bookmakerAccountId: accountIds[index],
         betType: leg.betType,
         stake: new Prisma.Decimal(leg.stake.toString()),

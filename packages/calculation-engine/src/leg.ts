@@ -85,6 +85,7 @@ export function prepareBetLeg(
   const payoutMultiplier = usesBetCredit ? profitFactor : effectiveOdd;
 
   return {
+    scenarioId: input.scenarioId,
     stake,
     odd,
     increasePercent,

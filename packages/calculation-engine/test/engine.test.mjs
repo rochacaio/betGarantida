@@ -69,6 +69,7 @@ test("balances three lines by the same target payout and recalculates cents", ()
   assert.equal(fixed(snapshot.realCashInvestment), "292.30");
   assert.equal(fixed(snapshot.protectedReturn), "299.99");
   assert.equal(fixed(snapshot.projectedProfit), "7.69");
+  assert.equal(snapshot.arbitrageIndex.toFixed(12), "0.974358974359");
 });
 
 test("manual stakes are preserved and only scenario results change", () => {
@@ -236,5 +237,82 @@ test("liquidação exige exatamente um resultado por linha e ao menos um green",
   assert.throws(
     () => calculateSettlement(inputs, ["LOST", "LOST"]),
     CalculationValidationError,
+  );
+});
+
+test("linhas do mesmo cenário somam seus retornos sem alterar o investimento", () => {
+  const snapshot = calculateOperationSnapshot([
+    { scenarioId: "home", stake: "100", odd: "2.5" },
+    { scenarioId: "home", stake: "50", odd: "3" },
+    { scenarioId: "away", stake: "250", odd: "2" },
+  ]);
+  assert.equal(fixed(snapshot.realCashInvestment), "400.00");
+  assert.deepEqual(
+    snapshot.legs.map((leg) => fixed(leg.scenarioResult)),
+    ["0.00", "0.00", "100.00"],
+  );
+  assert.equal(fixed(snapshot.protectedReturn), "400.00");
+});
+
+test("liquidação de cenário dividido soma apenas as apostas vencedoras", () => {
+  const settlement = calculateSettlement(
+    [
+      { scenarioId: "home", stake: "100", odd: "2.5" },
+      { scenarioId: "home", stake: "50", odd: "3" },
+      { scenarioId: "away", stake: "250", odd: "2" },
+    ],
+    ["WON", "WON", "LOST"],
+  );
+  assert.equal(fixed(settlement.realizedReturn), "400.00");
+  assert.equal(fixed(settlement.realizedProfit), "0.00");
+});
+
+test("green antecipado em uma filha continua independente na liquidação", () => {
+  const settlement = calculateSettlement(
+    [
+      { scenarioId: "home", stake: "100", odd: "2" },
+      { scenarioId: "home", stake: "50", odd: "3" },
+      { scenarioId: "away", stake: "100", odd: "2" },
+    ],
+    ["WON", "LOST", "WON"],
+  );
+  assert.equal(fixed(settlement.realizedReturn), "400.00");
+  assert.equal(fixed(settlement.realizedProfit), "150.00");
+});
+
+test("cashback não é pago entre pernas vencedoras do mesmo cenário", () => {
+  const snapshot = calculateOperationSnapshot([
+    {
+      scenarioId: "home",
+      stake: "50",
+      odd: "2",
+      cashbackPercent: "10",
+    },
+    { scenarioId: "home", stake: "50", odd: "2" },
+    { scenarioId: "away", stake: "100", odd: "2" },
+  ]);
+  assert.deepEqual(
+    snapshot.legs.map((leg) => fixed(leg.scenarioResult)),
+    ["0.00", "0.00", "5.00"],
+  );
+});
+
+test("cenário dividido combina Back, Lay e crédito sem duplicar caixa real", () => {
+  const snapshot = calculateOperationSnapshot([
+    { scenarioId: "home", stake: "20", odd: "3", usesBetCredit: true },
+    {
+      scenarioId: "home",
+      stake: "5",
+      odd: "4",
+      betType: "LAY",
+      commissionPercent: "2.5",
+    },
+    { scenarioId: "away", stake: "50", odd: "2" },
+  ]);
+  assert.equal(fixed(snapshot.promotionalStake), "20.00");
+  assert.equal(fixed(snapshot.realCashInvestment), "65.00");
+  assert.equal(
+    snapshot.legs[0].scenarioResult.toString(),
+    snapshot.legs[1].scenarioResult.toString(),
   );
 });

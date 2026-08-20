@@ -2,6 +2,8 @@ import { api, commandHeaders } from "../../lib/api/client";
 
 export type ApiLeg = {
   id: string;
+  scenarioId: string;
+  groupPosition: number;
   selectionName: string | null;
   bookmakerAccountId: string;
   betCreditId: string | null;
@@ -47,6 +49,8 @@ export type OperationInput = {
   generatesBetCredit: boolean;
   expectedBetCredit?: string;
   legs: Array<{
+    scenarioId: string;
+    groupPosition: number;
     selectionName?: string;
     bookmakerAccountId: string;
     betType: "BACK" | "LAY";

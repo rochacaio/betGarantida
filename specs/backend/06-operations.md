@@ -16,6 +16,10 @@
 
 A operação nasce `OPEN`. O frontend começa com duas linhas vazias, mas isso é comportamento de UI, não dado do backend.
 
+Uma operação exige pelo menos dois `scenarioId` distintos. Cada cenário pode ter
+uma perna principal (`groupPosition=0`) e pernas filhas ordenadas. A API aceita
+`scenarioId` ausente como uma perna de cenário exclusivo para compatibilidade.
+
 ## Preview
 
 `POST /operations/preview` executa validação matemática e retorna stakes/snapshot sem persistir ou movimentar saldo. Serve ao balanceamento autoritativo e não reserva fundos.

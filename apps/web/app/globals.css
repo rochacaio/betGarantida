@@ -1641,6 +1641,28 @@ td:first-child small {
   border-bottom: 0;
   padding-bottom: 10px;
 }
+.leg-row-wrap.split-child {
+  margin-left: 34px;
+  padding-left: 14px;
+  border-left: 2px solid #31513e;
+  background: linear-gradient(90deg, rgba(35, 68, 49, 0.16), transparent 45%);
+}
+.split-child-label {
+  min-height: 43px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  color: #a7baae;
+}
+.split-child-label span {
+  color: #688072;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+}
+.split-child-label strong {
+  font-size: 10px;
+}
 .leg-credit {
   display: flex;
   align-items: end;
@@ -1649,6 +1671,49 @@ td:first-child small {
 }
 .leg-credit .field {
   width: min(330px, 100%);
+}
+.split-line-control {
+  position: relative;
+}
+.split-line-button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #82978a;
+  font-size: 16px;
+}
+.split-line-button:hover,
+.split-line-button[aria-expanded="true"] {
+  border-color: #365343;
+  background: #11291c;
+  color: #d7e5dc;
+}
+.split-line-menu {
+  position: absolute;
+  z-index: 12;
+  left: 0;
+  bottom: calc(100% + 7px);
+  width: 190px;
+  padding: 7px;
+  border: 1px solid #3b4e42;
+  border-radius: 14px;
+  background: #202120;
+  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.45);
+}
+.split-line-menu button {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #f1f3f1;
+  padding: 10px;
+  text-align: left;
+  font-size: 11px;
+}
+.split-line-menu button:hover {
+  background: #313431;
 }
 .scenario-result.profit strong {
   color: var(--green);
@@ -1957,6 +2022,17 @@ td:first-child small {
     padding-left: 38px;
     align-items: stretch;
     flex-direction: column;
+  }
+  .leg-row-wrap.split-child {
+    margin-left: 18px;
+    padding-left: 9px;
+  }
+  .split-line-menu {
+    position: fixed;
+    left: 14px;
+    right: 14px;
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    width: auto;
   }
 }
 dialog.modal-backdrop,

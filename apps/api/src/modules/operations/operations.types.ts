@@ -1,6 +1,8 @@
 import { BetType, OperationStatus, Prisma } from "@prisma/client";
 
 export interface OperationLegCommand {
+  scenarioId: string;
+  groupPosition: number;
   selectionName?: string;
   bookmakerAccountId: string;
   betCreditId?: string;

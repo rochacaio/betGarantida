@@ -1,11 +1,13 @@
 import { Transform } from "class-transformer";
 import {
   IsBoolean,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
   Matches,
+  Min,
 } from "class-validator";
 import { trimString } from "../../auth/dto/transforms";
 import { BetType } from "@prisma/client";
@@ -15,6 +17,15 @@ const decimal = /^\d{1,17}(\.\d{1,6})?$/;
 const money = /^\d{1,17}(\.\d{1,2})?$/;
 
 export class OperationLegDto {
+  @IsOptional()
+  @IsUUID()
+  scenarioId?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  groupPosition?: number;
+
   @Transform(trimString)
   @IsOptional()
   @IsString()
@@ -70,6 +81,10 @@ export class OperationLegDto {
 }
 
 export class PreviewOperationLegDto {
+  @IsOptional()
+  @IsUUID()
+  scenarioId?: string;
+
   @IsOptional()
   @IsEnum(BetType)
   betType?: BetType;

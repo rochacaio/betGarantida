@@ -9,7 +9,7 @@ import {
   SettlementSnapshot,
 } from "./types";
 
-export const CALCULATION_ENGINE_VERSION = "1.1.0" as const;
+export const CALCULATION_ENGINE_VERSION = "1.2.0" as const;
 export const ROUNDING_POLICY = "HALF_UP_2_DECIMALS_RECALCULATE" as const;
 
 export function balanceStakes(inputs: BalanceLegInput[]): BetLegInput[] {
@@ -19,45 +19,87 @@ export function balanceStakes(inputs: BalanceLegInput[]): BetLegInput[] {
       "legs",
     );
   }
-  const anchor = inputs[0];
-  if (anchor?.stake === undefined) {
+  const scenarioKey = (input: BalanceLegInput, index: number) =>
+    input.scenarioId ?? `legacy-${index}`;
+  const groups = new Map<string, number[]>();
+  inputs.forEach((input, index) => {
+    const key = scenarioKey(input, index);
+    groups.set(key, [...(groups.get(key) ?? []), index]);
+  });
+  if (groups.size < 2) {
     throw new CalculationValidationError(
-      "A primeira stake é obrigatória.",
+      "A operação precisa de pelo menos dois cenários.",
+      "legs",
+    );
+  }
+  const groupEntries = [...groups.values()];
+  const anchorIndexes = groupEntries[0]!;
+  if (anchorIndexes.some((index) => inputs[index]?.stake === undefined)) {
+    throw new CalculationValidationError(
+      "Todas as stakes do primeiro cenário são obrigatórias.",
       "legs.0.stake",
     );
   }
-  const preparedAnchor = prepareBetLeg(
-    { ...anchor, stake: anchor.stake },
-    "legs.0",
-  );
-  const anchorBalanceFactor = preparedAnchor.payoutMultiplier.minus(
-    preparedAnchor.cashbackPercent.div(100),
-  );
-  const targetBalance = preparedAnchor.riskAmount.mul(anchorBalanceFactor);
-
-  return inputs.map((input, index) => {
-    if (index === 0 || (input.manualStake && input.stake !== undefined)) {
-      if (input.stake === undefined) {
-        throw new CalculationValidationError(
-          "Stake manual é obrigatória.",
-          `legs.${index}.stake`,
-        );
-      }
-      return { ...input, stake: roundMoney(input.stake) };
-    }
-    const unitLeg = prepareBetLeg({ ...input, stake: 1 }, `legs.${index}`);
-    const balanceFactor = unitLeg.payoutMultiplier.minus(
-      unitLeg.cashbackPercent.div(100),
+  const contribution = (
+    input: BalanceLegInput,
+    stake: Decimal.Value,
+    index: number,
+  ) => {
+    const leg = prepareBetLeg({ ...input, stake }, `legs.${index}`);
+    return leg.riskAmount.mul(
+      leg.payoutMultiplier.minus(leg.cashbackPercent.div(100)),
     );
-    if (balanceFactor.lte(0)) {
+  };
+  const targetBalance = anchorIndexes.reduce(
+    (total, index) =>
+      total.plus(contribution(inputs[index]!, inputs[index]!.stake!, index)),
+    new Decimal(0),
+  );
+  const balanced = inputs.map((input) => ({ ...input }));
+  for (const indexes of groupEntries) {
+    if (indexes === anchorIndexes) {
+      indexes.forEach((index) => {
+        balanced[index]!.stake = roundMoney(inputs[index]!.stake!);
+      });
+      continue;
+    }
+    const automatic = indexes.filter(
+      (index) =>
+        !inputs[index]!.manualStake || inputs[index]!.stake === undefined,
+    );
+    if (automatic.length > 1) {
+      throw new CalculationValidationError(
+        "Um cenário dividido pode ter apenas uma stake automática.",
+        `legs.${automatic[1]}`,
+      );
+    }
+    const fixed = indexes
+      .filter((index) => !automatic.includes(index))
+      .reduce((total, index) => {
+        const input = inputs[index]!;
+        if (input.stake === undefined) {
+          throw new CalculationValidationError(
+            "Stake manual é obrigatória.",
+            `legs.${index}.stake`,
+          );
+        }
+        balanced[index]!.stake = roundMoney(input.stake);
+        return total.plus(contribution(input, input.stake, index));
+      }, new Decimal(0));
+    if (automatic.length === 0) continue;
+    const index = automatic[0]!;
+    const unitContribution = contribution(inputs[index]!, 1, index);
+    if (unitContribution.lte(0)) {
       throw new CalculationValidationError(
         "Não é possível balancear esta combinação de payout e cashback.",
         `legs.${index}`,
       );
     }
-    const stakePerUnit = unitLeg.riskAmount.mul(balanceFactor);
-    return { ...input, stake: roundMoney(targetBalance.div(stakePerUnit)) };
-  });
+    balanced[index]!.stake = roundMoney(
+      Decimal.max(0, targetBalance.minus(fixed).div(unitContribution)),
+    );
+  }
+  return balanced as BetLegInput[];
 }
 
 export function calculateOperationSnapshot(
@@ -88,32 +130,64 @@ export function calculateOperationSnapshot(
       new Decimal(0),
     ),
   );
-  const scenarioReturns = prepared.map((winningLeg, winningIndex) => {
+  const scenarioKeys = prepared.map(
+    (leg, index) => leg.scenarioId ?? `legacy-${index}`,
+  );
+  const uniqueScenarios = [...new Set(scenarioKeys)];
+  if (uniqueScenarios.length < 2) {
+    throw new CalculationValidationError(
+      "A operação precisa de pelo menos dois cenários.",
+      "legs",
+    );
+  }
+  const resultByScenario = new Map<string, Decimal>();
+  const scenarioReturns = uniqueScenarios.map((winningScenario) => {
+    const payout = prepared.reduce(
+      (total, leg, index) =>
+        total.plus(
+          scenarioKeys[index] === winningScenario ? leg.projectedPayout : 0,
+        ),
+      new Decimal(0),
+    );
     const cashback = prepared.reduce((total, losingLeg, losingIndex) => {
-      if (losingIndex === winningIndex) return total;
+      if (scenarioKeys[losingIndex] === winningScenario) return total;
       return total.plus(
         losingLeg.stake.mul(losingLeg.cashbackPercent.div(100)),
       );
     }, new Decimal(0));
-    return roundMoney(winningLeg.projectedPayout.plus(cashback));
+    return roundMoney(payout.plus(cashback));
   });
   const scenarioResults = scenarioReturns.map((value) =>
     roundMoney(value.minus(realCashInvestment)),
+  );
+  uniqueScenarios.forEach((scenario, index) =>
+    resultByScenario.set(scenario, scenarioResults[index]!),
   );
   const protectedReturn = Decimal.min(...scenarioReturns);
   const projectedProfit = roundMoney(protectedReturn.minus(realCashInvestment));
   const projectedRoiPercent = realCashInvestment.isZero()
     ? new Decimal(0)
     : projectedProfit.div(realCashInvestment).mul(100);
-  const arbitrageIndex = prepared.reduce(
-    (total, leg) => total.plus(new Decimal(1).div(leg.payoutMultiplier)),
-    new Decimal(0),
-  );
+  const arbitrageIndex = uniqueScenarios.reduce((total, scenario) => {
+    const group = prepared.filter(
+      (_, index) => scenarioKeys[index] === scenario,
+    );
+    const risk = group.reduce(
+      (value, leg) => value.plus(leg.riskAmount),
+      new Decimal(0),
+    );
+    const payout = group.reduce(
+      (value, leg) =>
+        value.plus(leg.riskAmount.mul(leg.payoutMultiplier)),
+      new Decimal(0),
+    );
+    return total.plus(payout.isZero() ? 0 : risk.div(payout));
+  }, new Decimal(0));
 
   return {
     legs: prepared.map((leg, index) => ({
       ...leg,
-      scenarioResult: scenarioResults[index]!,
+      scenarioResult: resultByScenario.get(scenarioKeys[index]!)!,
     })),
     realCashInvestment,
     promotionalStake,

@@ -268,6 +268,21 @@ Status: implementada e validada.
   durante a liquidação final.
 - Múltiplos pagamentos antecipados são somados normalmente no resultado final,
   permitindo duplo green.
+
+## Extensão — divisão de linhas por cenário
+
+Status: implementada e validada por testes, lint e builds.
+
+- Cada perna possui `scenarioId` e `groupPosition`; pernas com o mesmo cenário
+  representam apostas físicas que ganham ou perdem pelo mesmo resultado.
+- Operações antigas recebem um cenário exclusivo por perna na migration
+  `20260820000000_add_bet_leg_scenarios`, sem alterar cálculos ou saldos.
+- O motor `1.2.0` agrega payouts e cashback por cenário e mantém resultados,
+  balanceamento e arredondamento anteriores quando não existe divisão.
+- A interface oferece `Apenas dividir` e `Dividir e copiar`; a cópia não reparte
+  a stake automaticamente e apostas filhas mantêm casa, tipo e promoções próprios.
+- Ledger, liquidação, green antecipado, exclusão e estornos continuam ocorrendo
+  por aposta física, enquanto o resultado protegido é consolidado por cenário.
 - Não há alteração de schema nem migration nova para esta extensão.
 
 ## Extensão — nome da linha

@@ -216,6 +216,8 @@ model Operation {
 model BetLeg {
   id                 String              @id @default(uuid()) @db.Uuid
   operationId        String              @map("operation_id") @db.Uuid
+  scenarioId         String              @map("scenario_id") @db.Uuid
+  groupPosition      Int                 @default(0) @map("group_position")
   bookmakerAccountId String              @map("bookmaker_account_id") @db.Uuid
   betCreditId        String?             @unique @map("bet_credit_id") @db.Uuid
     position           Int
@@ -242,6 +244,8 @@ model BetLeg {
   walletTransactions WalletTransaction[]
 
   @@unique([operationId, position])
+  @@unique([operationId, scenarioId, groupPosition])
+  @@index([operationId, scenarioId])
   @@index([bookmakerAccountId])
   @@map("bet_legs")
 }

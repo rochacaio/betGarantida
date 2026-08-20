@@ -38,6 +38,8 @@ type Bookmaker = {
 };
 type Leg = {
   id: string;
+  scenarioId: string;
+  groupPosition: number;
   selectionName: string;
   bookmakerId: string;
   betType: "BACK" | "LAY";
@@ -83,6 +85,20 @@ const money = new Intl.NumberFormat("pt-BR", {
 });
 const pct = (value: number) => `${value.toFixed(2).replace(".", ",")}%`;
 const uid = () => crypto.randomUUID();
+const emptyLeg = (scenarioId = uid(), groupPosition = 0): Leg => ({
+  id: uid(),
+  scenarioId,
+  groupPosition,
+  selectionName: "",
+  bookmakerId: "",
+  betType: "BACK",
+  stake: "",
+  odd: "",
+  commission: 0,
+  cashback: 0,
+  increase: 0,
+  result: "PENDING",
+});
 const saoPauloDateKey = (value: string | Date) => {
   const parts = new Intl.DateTimeFormat("pt-BR", {
     timeZone: "America/Sao_Paulo",
@@ -144,6 +160,8 @@ const mapOperation = (item: ApiOperation): Surebet => ({
       : Number(item.combinedPromotionProfit),
   legs: item.legs.map((leg) => ({
     id: leg.id,
+    scenarioId: leg.scenarioId ?? leg.id,
+    groupPosition: leg.groupPosition ?? 0,
     selectionName: leg.selectionName ?? "",
     bookmakerId: leg.bookmakerAccountId,
     betType: leg.betType ?? "BACK",
@@ -2044,23 +2062,30 @@ function Toggle({
 
 function LegRow({
   leg,
-  index,
+  scenarioLabel,
+  isChild,
+  canRemove,
   bookmakers,
   creditSources,
   scenarioResult,
   update,
   updateStake,
   remove,
+  split,
 }: {
   leg: Leg;
-  index: number;
+  scenarioLabel: string;
+  isChild: boolean;
+  canRemove: boolean;
   bookmakers: Bookmaker[];
   creditSources: Surebet[];
   scenarioResult: number | null;
   update: (patch: Partial<Leg>) => void;
   updateStake: (stake: number | "") => void;
   remove: () => void;
+  split?: (copy: boolean) => void;
 }) {
+  const [splitMenuOpen, setSplitMenuOpen] = useState(false);
   const b = bookmakers.find((x) => x.id === leg.bookmakerId);
   const earlyWinRecorded = leg.persistedResult === "WON";
   const layLiability =
@@ -2072,18 +2097,25 @@ function LegRow({
       ? 1 + (Number(leg.stake) * (1 - leg.commission / 100)) / layLiability
       : 0;
   return (
-    <div className="leg-row-wrap">
+    <div className={`leg-row-wrap ${isChild ? "split-child" : "split-parent"}`}>
       <div className="leg-row">
-        <div className="leg-number">{String.fromCharCode(65 + index)}</div>
-        <Field label="Nome da linha">
-          <input
-            type="text"
-            maxLength={160}
-            placeholder="Ex.: Vitória Fluminense"
-            value={leg.selectionName}
-            onChange={(event) => update({ selectionName: event.target.value })}
-          />
-        </Field>
+        <div className="leg-number">{isChild ? "↳" : scenarioLabel}</div>
+        {isChild ? (
+          <div className="split-child-label">
+            <span>APOSTA DIVIDIDA</span>
+            <strong>Linha filha {leg.groupPosition}</strong>
+          </div>
+        ) : (
+          <Field label="Nome da linha">
+            <input
+              type="text"
+              maxLength={160}
+              placeholder="Ex.: Vitória Fluminense"
+              value={leg.selectionName}
+              onChange={(event) => update({ selectionName: event.target.value })}
+            />
+          </Field>
+        )}
         <Field label="Casa de aposta">
           <select
             value={leg.bookmakerId}
@@ -2215,7 +2247,9 @@ function LegRow({
           className={`effective scenario-result ${scenarioResult === null ? "neutral" : scenarioResult >= 0 ? "profit" : "loss"}`}
         >
           <span>
-            {scenarioResult === null
+            {isChild
+              ? "Retorno individual"
+              : scenarioResult === null
               ? "Resultado"
               : scenarioResult >= 0
                 ? "Lucro"
@@ -2224,11 +2258,13 @@ function LegRow({
           <strong>
             {scenarioResult === null
               ? "—"
+              : isChild
+                ? money.format(scenarioResult)
               : `${scenarioResult >= 0 ? "+ " : "− "}${money.format(Math.abs(scenarioResult))}`}
           </strong>
           <small>{b?.name}</small>
         </div>
-        {index > 1 && (
+        {canRemove && (
           <button className="remove-leg" onClick={remove}>
             −
           </button>
@@ -2320,6 +2356,41 @@ function LegRow({
             {earlyWinRecorded && <small>Green antecipado já creditado</small>}
           </div>
         )}
+        {split && (
+          <div className="split-line-control">
+            <button
+              type="button"
+              className="split-line-button"
+              aria-label="Dividir linha"
+              aria-expanded={splitMenuOpen}
+              onClick={() => setSplitMenuOpen((open) => !open)}
+            >
+              ✂
+            </button>
+            {splitMenuOpen && (
+              <div className="split-line-menu">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSplitMenuOpen(false);
+                    split(false);
+                  }}
+                >
+                  ✂ Apenas dividir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSplitMenuOpen(false);
+                    split(true);
+                  }}
+                >
+                  ▣ Dividir e copiar
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2351,30 +2422,8 @@ function Editor({
           existingOperation: true,
         }))
       : [
-          {
-            id: uid(),
-            selectionName: "",
-            bookmakerId: "",
-            betType: "BACK",
-            stake: "",
-            odd: "",
-            commission: 0,
-            cashback: 0,
-            increase: 0,
-            result: "PENDING",
-          },
-          {
-            id: uid(),
-            selectionName: "",
-            bookmakerId: "",
-            betType: "BACK",
-            stake: "",
-            odd: "",
-            commission: 0,
-            cashback: 0,
-            increase: 0,
-            result: "PENDING",
-          },
+          emptyLeg(),
+          emptyLeg(),
         ],
   );
   const [generatesBetCredit, setGeneratesBetCredit] = useState(
@@ -2434,12 +2483,25 @@ function Editor({
   })();
   const returns = legs.map((l) => riskAmount(l) * payoutMultiplier(l));
   const allStakesReady = legs.every((leg) => leg.stake !== "" && leg.stake > 0);
-  const localScenarioResults = legs.map((leg, index) =>
+  const scenarioIds = [...new Set(legs.map((leg) => leg.scenarioId))];
+  const scenarioReturnById = new Map(
+    scenarioIds.map((scenarioId) => [
+      scenarioId,
+      legs.reduce(
+        (sum, leg, index) =>
+          sum + (leg.scenarioId === scenarioId ? returns[index] : 0),
+        0,
+      ),
+    ]),
+  );
+  const localScenarioResults = legs.map((leg) =>
     allStakesReady && leg.odd !== "" && leg.odd > 1
-      ? returns[index] - total
+      ? (scenarioReturnById.get(leg.scenarioId) ?? 0) - total
       : null,
   );
-  const localProtectedReturn = isCalculationReady ? Math.min(...returns) : 0;
+  const localProtectedReturn = isCalculationReady
+    ? Math.min(...scenarioReturnById.values())
+    : 0;
   const localProfit = isCalculationReady ? localProtectedReturn - total : 0;
   const localRoi = total ? (localProfit / total) * 100 : 0;
   const [canonical, setCanonical] = useState<{
@@ -2459,6 +2521,8 @@ function Editor({
     : localProfit;
   const roi = isCalculationReady ? (canonical?.roi ?? localRoi) : localRoi;
   const rebalanceLegs = (nextLegs: Leg[]) => {
+    if (new Set(nextLegs.map((leg) => leg.scenarioId)).size < nextLegs.length)
+      return nextLegs;
     const anchor = nextLegs[0];
     if (
       !anchor ||
@@ -2493,7 +2557,24 @@ function Editor({
   const updateLeg = (id: string, patch: Partial<Leg>) =>
     setLegs((current) =>
       rebalanceLegs(
-        current.map((leg) => (leg.id === id ? { ...leg, ...patch } : leg)),
+        current.map((leg) => {
+          const target = current.find((item) => item.id === id);
+          if (
+            target &&
+            target.groupPosition === 0 &&
+            patch.result !== undefined &&
+            leg.scenarioId === target.scenarioId &&
+            leg.persistedResult !== "WON"
+          )
+            return { ...leg, result: patch.result };
+          if (
+            target &&
+            patch.selectionName !== undefined &&
+            leg.scenarioId === target.scenarioId
+          )
+            return { ...leg, selectionName: patch.selectionName };
+          return leg.id === id ? { ...leg, ...patch } : leg;
+        }),
       ),
     );
   const updateLegStake = (id: string, index: number, stake: number | "") =>
@@ -2506,6 +2587,54 @@ function Editor({
         ),
       ),
     );
+  const splitLeg = (parent: Leg, copy: boolean) =>
+    setLegs((current) => {
+      const siblings = current.filter(
+        (leg) => leg.scenarioId === parent.scenarioId,
+      );
+      const groupPosition =
+        Math.max(...siblings.map((leg) => leg.groupPosition)) + 1;
+      const child: Leg = copy
+        ? {
+            ...parent,
+            id: uid(),
+            groupPosition,
+            result: "PENDING",
+            persistedResult: undefined,
+            existingOperation: false,
+            stakeManuallyEdited: true,
+            ...(parent.usesBetCredit && !parent.usesFreeBetCredit
+              ? {
+                  usesBetCredit: false,
+                  usesFreeBetCredit: false,
+                  creditSourceSurebetId: undefined,
+                }
+              : {}),
+          }
+        : {
+            ...emptyLeg(parent.scenarioId, groupPosition),
+            selectionName: parent.selectionName,
+            stakeManuallyEdited: true,
+          };
+      const lastSiblingIndex = current.reduce(
+        (last, leg, index) =>
+          leg.scenarioId === parent.scenarioId ? index : last,
+        -1,
+      );
+      const next = current.map((leg) =>
+        leg.scenarioId === parent.scenarioId
+          ? { ...leg, stakeManuallyEdited: true }
+          : leg,
+      );
+      next.splice(lastSiblingIndex + 1, 0, child);
+      return next;
+    });
+  const removeLeg = (target: Leg) =>
+    setLegs((current) => {
+      if (target.groupPosition > 0)
+        return current.filter((leg) => leg.id !== target.id);
+      return current.filter((leg) => leg.scenarioId !== target.scenarioId);
+    });
   const showValidationToast = (message: string) => {
     showToast("error", "Não foi possível concluir", message);
   };
@@ -2522,6 +2651,7 @@ function Editor({
       void operationsApi
         .preview(
           legs.map((leg, index) => ({
+            scenarioId: leg.scenarioId,
             stake: leg.stake === "" ? undefined : Number(leg.stake).toFixed(2),
             betType: leg.betType,
             odd: Number(leg.odd).toString(),
@@ -2529,7 +2659,8 @@ function Editor({
             cashbackPercent: leg.cashback.toString(),
             increasePercent: leg.increase.toString(),
             usesBetCredit: !!leg.usesBetCredit,
-            manualStake: index === 0 || !!leg.stakeManuallyEdited,
+            manualStake:
+              index === 0 || leg.groupPosition > 0 || !!leg.stakeManuallyEdited,
           })),
         )
         .then((response) => {
@@ -2573,9 +2704,9 @@ function Editor({
       return showValidationToast(
         "Preencha o evento ou identificação da surebet.",
       );
-    if (legs.length < 2)
+    if (scenarioIds.length < 2)
       return showValidationToast(
-        "A surebet precisa ter pelo menos duas entradas.",
+        "A surebet precisa ter pelo menos dois resultados diferentes.",
       );
     const invalidLegIndex = legs.findIndex(
       (leg) =>
@@ -2873,13 +3004,30 @@ function Editor({
               <LegRow
                 key={leg.id}
                 leg={leg}
-                index={index}
+                scenarioLabel={String.fromCharCode(
+                  65 + scenarioIds.indexOf(leg.scenarioId),
+                )}
+                isChild={leg.groupPosition > 0}
+                canRemove={leg.groupPosition > 0 || scenarioIds.length > 2}
                 bookmakers={bookmakers}
                 creditSources={creditSources}
-                scenarioResult={scenarioResults[index]}
+                scenarioResult={
+                  leg.groupPosition > 0
+                    ? isCalculationReady
+                      ? returns[index]
+                      : null
+                    : scenarioResults[index]
+                }
                 update={(patch) => updateLeg(leg.id, patch)}
                 updateStake={(stake) => updateLegStake(leg.id, index, stake)}
-                remove={() => setLegs(legs.filter((x) => x.id !== leg.id))}
+                remove={() => removeLeg(leg)}
+                split={
+                  leg.groupPosition === 0 &&
+                  !onlyNamesEditable &&
+                  (!editing || editing.status === "OPEN")
+                    ? (copy) => splitLeg(leg, copy)
+                    : undefined
+                }
               />
             ))}
           </div>
@@ -2887,21 +3035,7 @@ function Editor({
             className="add-leg"
             onClick={() =>
               setLegs((current) =>
-                rebalanceLegs([
-                  ...current,
-                  {
-                    id: uid(),
-                    selectionName: "",
-                    bookmakerId: "",
-                    betType: "BACK",
-                    stake: "",
-                    odd: "",
-                    commission: 0,
-                    cashback: 0,
-                    increase: 0,
-                    result: "PENDING",
-                  },
-                ]),
+                rebalanceLegs([...current, emptyLeg()]),
               )
             }
           >
@@ -2973,6 +3107,8 @@ export default function Home() {
       ? Number(surebet.expectedBetCredit ?? 0).toFixed(2)
       : undefined,
     legs: surebet.legs.map((leg) => ({
+      scenarioId: leg.scenarioId,
+      groupPosition: leg.groupPosition,
       selectionName: leg.selectionName.trim() || undefined,
       bookmakerAccountId: leg.bookmakerId,
       betType: leg.betType,

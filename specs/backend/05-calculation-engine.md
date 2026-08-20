@@ -4,7 +4,11 @@ O documento matemático de origem é `README_Bet_Sem_Medo.md`. Este pacote deve 
 
 ## Entradas por perna
 
-`betType`, `stake`, `odd`, `increasePercent`, `commissionPercent`, `cashbackPercent`, `usesBetCredit`.
+`scenarioId`, `betType`, `stake`, `odd`, `increasePercent`, `commissionPercent`, `cashbackPercent`, `usesBetCredit`.
+
+Pernas com o mesmo `scenarioId` são apostas físicas do mesmo resultado esportivo
+e ganham ou perdem juntas no cálculo projetado. Sem `scenarioId`, cada perna é
+tratada como um cenário exclusivo para preservar clientes e operações antigos.
 
 ## Fórmulas base
 
@@ -52,10 +56,10 @@ targetBalance = anchorStake × anchorBalanceFactor
 stakeN = targetBalance / balanceFactorN
 ```
 
-Para cada cenário vencedor `i`:
+Para cada cenário vencedor `i`, somam-se os payouts de todas as pernas agrupadas:
 
 ```text
-scenarioReturn[i] = payout[i] + soma do cashback em dinheiro das pernas perdedoras
+scenarioReturn[i] = soma dos payouts do cenário i + soma do cashback das pernas dos outros cenários
 scenarioResult[i] = scenarioReturn[i] - realCashInvestment
 protectedReturn = mínimo dos retornos dos cenários
 projectedProfit = protectedReturn - realCashInvestment

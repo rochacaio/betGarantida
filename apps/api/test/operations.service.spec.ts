@@ -68,6 +68,8 @@ function record() {
     legs: dto().legs.map((leg, position) => ({
       id: `${position + 1}0000000-0000-4000-8000-000000000001`,
       operationId,
+      scenarioId: `${position + 1}0000000-0000-4000-8000-000000000001`,
+      groupPosition: 0,
       bookmakerAccountId: leg.bookmakerAccountId,
       betCreditId: null,
       position,
@@ -122,7 +124,7 @@ describe("OperationsService", () => {
       realCashInvestment: "221.5",
       protectedReturn: "243",
       projectedProfit: "21.5",
-      engineVersion: "1.1.0",
+      engineVersion: "1.2.0",
     });
     expect(repository.create.mock.calls).toHaveLength(0);
   });
@@ -178,6 +180,30 @@ describe("OperationsService", () => {
     ).toEqual(["100.00", "121.50"]);
   });
 
+  it("agrupa apostas físicas do mesmo cenário no preview", () => {
+    const home = "50000000-0000-4000-8000-000000000001";
+    const away = "50000000-0000-4000-8000-000000000002";
+    const result = service.preview({
+      legs: [
+        { scenarioId: home, stake: "100", odd: "2.5", manualStake: true },
+        { scenarioId: home, stake: "50", odd: "3", manualStake: true },
+        { scenarioId: away, stake: "250", odd: "2", manualStake: true },
+      ],
+    });
+    expect(result.snapshot).toMatchObject({
+      realCashInvestment: "400",
+      protectedReturn: "400",
+      projectedProfit: "0",
+    });
+    expect(
+      (
+        result.snapshot as {
+          legs: Array<{ scenarioResult: string }>;
+        }
+      ).legs.map((leg) => leg.scenarioResult),
+    ).toEqual(["0", "0", "100"]);
+  });
+
   it("mantém stakes finais informadas na criação e recalcula snapshot no servidor", async () => {
     repository.create.mockResolvedValue(record());
     await service.create(userId, dto(), idempotencyKey);
@@ -189,7 +215,7 @@ describe("OperationsService", () => {
       "100.00",
       "121.50",
     ]);
-    expect(command.engineVersion).toBe("1.1.0");
+    expect(command.engineVersion).toBe("1.2.0");
     expect(command.calculationSnapshot).toMatchObject({
       roundingPolicy: "HALF_UP_2_DECIMALS_RECALCULATE",
     });

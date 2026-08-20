@@ -4,6 +4,7 @@ export type DecimalInput = Decimal.Value;
 export type BetType = "BACK" | "LAY";
 
 export interface BetLegInput {
+  scenarioId?: string;
   stake: DecimalInput;
   odd: DecimalInput;
   increasePercent?: DecimalInput;
@@ -19,6 +20,7 @@ export interface BalanceLegInput extends Omit<BetLegInput, "stake"> {
 }
 
 export interface PreparedBetLeg {
+  scenarioId?: string;
   stake: Decimal;
   odd: Decimal;
   increasePercent: Decimal;

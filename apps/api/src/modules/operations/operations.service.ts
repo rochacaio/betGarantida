@@ -6,7 +6,7 @@ import {
   UnprocessableEntityException,
 } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   balanceStakes,
   calculateOperationSnapshot,
@@ -56,6 +56,7 @@ export class OperationsService {
   preview(dto: PreviewOperationDto) {
     try {
       const balanceInputs = dto.legs.map((leg) => ({
+        scenarioId: leg.scenarioId,
         stake: leg.stake,
         betType: leg.betType ?? "BACK",
         odd: leg.odd,
@@ -448,6 +449,8 @@ export class OperationsService {
       engineVersion: snapshot.engineVersion,
       calculationSnapshot: serializeDecimals(snapshot) as Prisma.InputJsonValue,
       legs: snapshot.legs.map((leg, index) => ({
+        scenarioId: dto.legs[index].scenarioId ?? randomUUID(),
+        groupPosition: dto.legs[index].groupPosition ?? 0,
         selectionName: dto.legs[index].selectionName || undefined,
         bookmakerAccountId: dto.legs[index].bookmakerAccountId,
         betCreditId: dto.legs[index].betCreditId,
@@ -470,6 +473,7 @@ export class OperationsService {
 
   private engineLeg(leg: OperationLegDto) {
     return {
+      scenarioId: leg.scenarioId,
       stake: leg.stake,
       betType: leg.betType ?? "BACK",
       odd: leg.odd,
@@ -533,6 +537,29 @@ export class OperationsService {
     );
     if (new Set(ids).size !== ids.length)
       fields.push({ path: "legs", code: "DUPLICATE_BET_CREDIT" });
+    const scenarioPositions = new Set<string>();
+    dto.legs.forEach((leg, index) => {
+      if (!leg.scenarioId) return;
+      const key = `${leg.scenarioId}:${leg.groupPosition ?? 0}`;
+      if (scenarioPositions.has(key))
+        fields.push({
+          path: `legs.${index}.groupPosition`,
+          code: "DUPLICATE_SCENARIO_POSITION",
+        });
+      scenarioPositions.add(key);
+    });
+    const suppliedScenarios = new Set(
+      dto.legs.flatMap((leg) => (leg.scenarioId ? [leg.scenarioId] : [])),
+    );
+    for (const scenarioId of suppliedScenarios) {
+      if (
+        !dto.legs.some(
+          (leg) =>
+            leg.scenarioId === scenarioId && (leg.groupPosition ?? 0) === 0,
+        )
+      )
+        fields.push({ path: "legs", code: "SCENARIO_WITHOUT_PRIMARY_LEG" });
+    }
     if (fields.length)
       throw new UnprocessableEntityException({
         code: "VALIDATION_ERROR",

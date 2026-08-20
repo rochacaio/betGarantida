@@ -482,6 +482,7 @@ export class PrismaOperationsRepository implements OperationsRepository {
           );
           const settlement = calculateSettlement(
             operation.legs.map((leg) => ({
+              scenarioId: leg.scenarioId,
               stake: leg.stake.toString(),
               betType: leg.betType,
               odd: leg.odd.toString(),
