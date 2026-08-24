@@ -1290,7 +1290,9 @@ function Bookmakers({
         <div className="summary-strip">
           <div>
             <span>Saldo total disponível</span>
-            <strong>{money.format(total)}</strong>
+            <strong>
+              {money.format(total + Number(reservedBalance?.balance ?? 0))}
+            </strong>
           </div>
           <div>
             <span>Casas ativas</span>

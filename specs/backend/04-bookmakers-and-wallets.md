@@ -44,6 +44,9 @@ O `cachedBalance` pode acelerar leituras, mas é atualizado na mesma transação
   na mesma transação. Enviar a reserva a outra casa faz o movimento inverso.
   Ambos os lados aparecem nos respectivos históricos e nenhum saldo pode ficar
   negativo.
+- O indicador global de saldo disponível soma o dinheiro disponível nas casas e
+  o saldo reservado, pois ambos continuam destinados a apostas. O patrimônio
+  adiciona a esse total apenas os valores comprometidos em apostas abertas.
 
 ## Efeitos das operações
 
