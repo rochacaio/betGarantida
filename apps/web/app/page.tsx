@@ -2152,7 +2152,7 @@ function LegRow({
             <input
               type="text"
               maxLength={160}
-              placeholder="Ex.: Vitória Fluminense"
+              placeholder="Ex.: Vitória Cruzeiro"
               value={leg.selectionName}
               onChange={(event) => update({ selectionName: event.target.value })}
             />

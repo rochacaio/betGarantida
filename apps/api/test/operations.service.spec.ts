@@ -245,10 +245,10 @@ describe("OperationsService", () => {
   it("persiste o nome opcional de cada linha", async () => {
     repository.create.mockResolvedValue(record());
     const input = dto();
-    input.legs[0].selectionName = "Vitória Fluminense";
+    input.legs[0].selectionName = "Vitória Cruzeiro";
     await service.create(userId, input, idempotencyKey);
     expect(repository.create.mock.calls[0]?.[0].legs[0]?.selectionName).toBe(
-      "Vitória Fluminense",
+      "Vitória Cruzeiro",
     );
     expect(repository.create.mock.calls[0]?.[0].legs[1]?.selectionName).toBe(
       undefined,
