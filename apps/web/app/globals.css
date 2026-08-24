@@ -650,6 +650,54 @@ td:first-child small {
   font-size: 18px;
   margin-top: 5px;
 }
+.reserved-balance-card {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto auto;
+  align-items: center;
+  gap: 28px;
+  margin: 20px 0 28px;
+  padding: 22px 26px;
+  border: 1px solid #28523a;
+  border-radius: 18px;
+  background: linear-gradient(120deg, #0d2c1d, #092116);
+}
+.reserved-balance-card h2 {
+  margin: 5px 0;
+}
+.reserved-balance-card p {
+  margin: 0;
+  color: var(--muted);
+}
+.reserved-balance-value {
+  display: grid;
+  gap: 4px;
+  min-width: 180px;
+}
+.reserved-balance-value span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.reserved-balance-value strong {
+  color: var(--green);
+  font-size: 28px;
+}
+.reserved-balance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 9px;
+  max-width: 390px;
+}
+.reserved-history {
+  margin: -10px 0 28px;
+  padding: 22px 26px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+}
+.compact-heading {
+  margin-bottom: 10px;
+}
 .surebet-daily-summary {
   margin-bottom: 24px;
 }
@@ -1531,6 +1579,18 @@ td:first-child small {
   }
   .summary-strip > div {
     margin: 6px 0;
+  }
+  .reserved-balance-card {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 20px;
+  }
+  .reserved-balance-actions {
+    justify-content: stretch;
+    max-width: none;
+  }
+  .reserved-balance-actions button {
+    flex: 1 1 100%;
   }
   .bookmaker-grid {
     grid-template-columns: 1fr;

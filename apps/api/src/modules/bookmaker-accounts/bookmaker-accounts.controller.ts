@@ -15,6 +15,7 @@ import { CurrentUser } from "../auth/current-user.decorator";
 import { AdjustmentDto } from "../wallets/dto/adjustment.dto";
 import { AmountDto } from "../wallets/dto/amount.dto";
 import { ListTransactionsDto } from "../wallets/dto/list-transactions.dto";
+import { ReservedBalanceDto } from "../wallets/dto/reserved-balance.dto";
 import { TransferDto } from "../wallets/dto/transfer.dto";
 import { WalletService } from "../wallets/wallet.service";
 import { BookmakerAccountsService } from "./bookmaker-accounts.service";
@@ -46,6 +47,39 @@ export class BookmakerAccountsController {
     @Query() query: ListBookmakerAccountsDto,
   ) {
     return this.accounts.list(user.id, query.status);
+  }
+
+  @Get("reserved-balance")
+  reservedBalance(@CurrentUser() user: AuthenticatedUser) {
+    return this.wallets.getReservedBalance(user.id);
+  }
+
+  @Post("reserved-balance/from-bookmaker")
+  reserveBalance(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ReservedBalanceDto,
+    @Headers("idempotency-key") idempotencyKey = "",
+  ) {
+    return this.wallets.moveReservedBalance({
+      userId: user.id,
+      ...dto,
+      direction: "FROM_BOOKMAKER",
+      idempotencyKey,
+    });
+  }
+
+  @Post("reserved-balance/to-bookmaker")
+  sendReservedBalance(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ReservedBalanceDto,
+    @Headers("idempotency-key") idempotencyKey = "",
+  ) {
+    return this.wallets.moveReservedBalance({
+      userId: user.id,
+      ...dto,
+      direction: "TO_BOOKMAKER",
+      idempotencyKey,
+    });
   }
 
   @Get(":id")

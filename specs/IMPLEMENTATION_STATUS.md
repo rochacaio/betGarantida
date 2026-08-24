@@ -219,6 +219,9 @@ Status: implementada e validada por lint, typecheck e build de produção.
 - Casas de aposta possuem titular editável. Cartões, extratos, dashboard,
   seletores de surebet e transferências exibem `casa · titular`, e transferências
   entre titulares diferentes do mesmo usuário gestor são suportadas.
+- A aba de casas possui carteira de saldo reservado com ledger próprio. Valores
+  podem sair atomicamente de uma casa para a reserva e depois entrar em qualquer
+  casa ativa, sem serem classificados como saque pessoal.
 - Dados demonstrativos, `initialBookmakers`, `initialSurebets`, flags financeiras locais e `betgarantida-demo` foram removidos.
 - Estados iniciais de carregamento, listas vazias e erros de autenticação/mutação estão cobertos; `STALE_VERSION` preserva o drawer/rascunho porque a mutação rejeitada não desmonta o editor.
 - Rewrite por `API_ORIGIN` mantém cookies em mesma origem e está alinhado ao deploy na Vercel.

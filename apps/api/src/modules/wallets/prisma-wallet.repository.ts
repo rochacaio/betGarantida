@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   BookmakerAccountStatus,
   Prisma,
@@ -11,6 +11,8 @@ import {
   CreateAccountCommand,
   FinancialCommand,
   FinancialCommandResult,
+  ReservedBalanceCommand,
+  ReservedBalanceCommandResult,
   TransferCommand,
   TransferCommandResult,
   WalletRepository,
@@ -23,6 +25,7 @@ interface TransactionMetadata {
   reason?: string;
   transferId?: string;
   counterpartyBookmakerAccountId?: string;
+  reservedBalance?: string;
 }
 
 @Injectable()
@@ -284,6 +287,163 @@ export class PrismaWalletRepository implements WalletRepository {
     );
   }
 
+  async moveReservedBalance(
+    command: ReservedBalanceCommand,
+  ): Promise<ReservedBalanceCommandResult> {
+    const bookmakerIdempotencyKey = `reserved:${createHash("sha256")
+      .update(command.idempotencyKey)
+      .digest("hex")}`;
+    return this.withSerializableRetry(() =>
+      this.prisma.$transaction(
+        async (tx) => {
+          const userLock = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+            SELECT "id" FROM "users"
+            WHERE "id" = ${command.userId}::uuid
+            FOR UPDATE
+          `);
+          if (!userLock.length) throw new WalletAccountNotFoundError();
+
+          const accountLock = await tx.$queryRaw<
+            Array<{ id: string }>
+          >(Prisma.sql`
+            SELECT "id" FROM "bookmaker_accounts"
+            WHERE "id" = ${command.bookmakerAccountId}::uuid
+              AND "user_id" = ${command.userId}::uuid
+            FOR UPDATE
+          `);
+          if (!accountLock.length) throw new WalletAccountNotFoundError();
+
+          const existing = await tx.reservedBalanceTransaction.findUnique({
+            where: {
+              userId_idempotencyKey: {
+                userId: command.userId,
+                idempotencyKey: command.idempotencyKey,
+              },
+            },
+          });
+          if (existing) {
+            const metadata = this.metadata(existing.metadata);
+            const bookmakerTransaction =
+              await tx.walletTransaction.findUniqueOrThrow({
+                where: {
+                  userId_idempotencyKey: {
+                    userId: command.userId,
+                    idempotencyKey: bookmakerIdempotencyKey,
+                  },
+                },
+              });
+            return {
+              transactionId: existing.id,
+              transactionType: existing.type,
+              bookmakerTransaction:
+                this.transactionRecord(bookmakerTransaction),
+              reservedBalance: new Prisma.Decimal(
+                metadata.reservedBalance ?? "0",
+              ),
+              bookmakerBalance: new Prisma.Decimal(
+                metadata.resultingBalance ?? "0",
+              ),
+              replayed: true,
+              requestHash: metadata.requestHash ?? "",
+            };
+          }
+
+          const account = await tx.bookmakerAccount.findUniqueOrThrow({
+            where: { id: command.bookmakerAccountId },
+          });
+          if (account.status !== BookmakerAccountStatus.ACTIVE)
+            throw new WalletAccountArchivedError();
+
+          const reservedTotal = await tx.reservedBalanceTransaction.aggregate({
+            where: { userId: command.userId },
+            _sum: { amount: true },
+          });
+          const currentReserved =
+            reservedTotal._sum.amount ?? new Prisma.Decimal(0);
+          const fromBookmaker = command.direction === "FROM_BOOKMAKER";
+          const nextReserved = currentReserved.add(
+            fromBookmaker ? command.amount : command.amount.negated(),
+          );
+          const nextBookmaker = account.cachedBalance.add(
+            fromBookmaker ? command.amount.negated() : command.amount,
+          );
+          if (nextReserved.isNegative() || nextBookmaker.isNegative())
+            throw new WalletInsufficientBalanceError();
+
+          const occurredAt = new Date();
+          const metadata: Prisma.InputJsonObject = {
+            requestHash: command.requestHash,
+            resultingBalance: nextBookmaker.toFixed(2),
+            reservedBalance: nextReserved.toFixed(2),
+            ...(command.description ? { reason: command.description } : {}),
+          };
+          const reservedTransaction =
+            await tx.reservedBalanceTransaction.create({
+              data: {
+                userId: command.userId,
+                bookmakerAccountId: account.id,
+                type: fromBookmaker ? "FROM_BOOKMAKER" : "TO_BOOKMAKER",
+                amount: fromBookmaker
+                  ? command.amount
+                  : command.amount.negated(),
+                idempotencyKey: command.idempotencyKey,
+                occurredAt,
+                metadata,
+              },
+            });
+          const bookmakerTransaction = await tx.walletTransaction.create({
+            data: {
+              userId: command.userId,
+              bookmakerAccountId: account.id,
+              type: fromBookmaker
+                ? WalletTransactionType.RESERVED_OUT
+                : WalletTransactionType.RESERVED_IN,
+              amount: fromBookmaker ? command.amount.negated() : command.amount,
+              idempotencyKey: bookmakerIdempotencyKey,
+              occurredAt,
+              metadata,
+            },
+          });
+          await tx.bookmakerAccount.update({
+            where: { id: account.id },
+            data: {
+              cachedBalance: nextBookmaker,
+              version: { increment: 1 },
+            },
+          });
+          return {
+            transactionId: reservedTransaction.id,
+            transactionType: reservedTransaction.type,
+            bookmakerTransaction: this.transactionRecord(bookmakerTransaction),
+            reservedBalance: nextReserved,
+            bookmakerBalance: nextBookmaker,
+            replayed: false,
+            requestHash: command.requestHash,
+          };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    );
+  }
+
+  async getReservedBalance(userId: string) {
+    const [total, transactions] = await Promise.all([
+      this.prisma.reservedBalanceTransaction.aggregate({
+        where: { userId },
+        _sum: { amount: true },
+      }),
+      this.prisma.reservedBalanceTransaction.findMany({
+        where: { userId },
+        orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+        take: 100,
+      }),
+    ]);
+    return {
+      balance: total._sum.amount ?? new Prisma.Decimal(0),
+      transactions,
+    };
+  }
+
   async listTransactions(input: {
     userId: string;
     bookmakerAccountId: string;
@@ -389,12 +549,17 @@ export class PrismaWalletRepository implements WalletRepository {
       typeof value.counterpartyBookmakerAccountId === "string"
         ? value.counterpartyBookmakerAccountId
         : undefined;
+    const reservedBalance =
+      typeof value.reservedBalance === "string"
+        ? value.reservedBalance
+        : undefined;
     return {
       requestHash,
       resultingBalance,
       reason,
       transferId,
       counterpartyBookmakerAccountId,
+      reservedBalance,
     };
   }
 

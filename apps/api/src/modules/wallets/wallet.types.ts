@@ -2,6 +2,7 @@ import {
   BetType,
   BookmakerAccountStatus,
   WalletTransactionType,
+  ReservedBalanceTransactionType,
 } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 
@@ -69,6 +70,38 @@ export interface TransferCommandResult {
   requestHash: string;
 }
 
+export interface ReservedBalanceCommand {
+  userId: string;
+  bookmakerAccountId: string;
+  direction: "FROM_BOOKMAKER" | "TO_BOOKMAKER";
+  amount: Decimal;
+  description?: string;
+  idempotencyKey: string;
+  requestHash: string;
+}
+
+export interface ReservedBalanceCommandResult {
+  transactionId: string;
+  transactionType: ReservedBalanceTransactionType;
+  bookmakerTransaction: WalletTransactionRecord;
+  reservedBalance: Decimal;
+  bookmakerBalance: Decimal;
+  replayed: boolean;
+  requestHash: string;
+}
+
+export interface ReservedBalanceSnapshot {
+  balance: Decimal;
+  transactions: Array<{
+    id: string;
+    bookmakerAccountId: string;
+    type: ReservedBalanceTransactionType;
+    amount: Decimal;
+    occurredAt: Date;
+    metadata: unknown;
+  }>;
+}
+
 export interface CreateAccountCommand {
   userId: string;
   name: string;
@@ -90,6 +123,10 @@ export interface WalletRepository {
     command: FinancialCommand,
   ): Promise<FinancialCommandResult>;
   transfer(command: TransferCommand): Promise<TransferCommandResult>;
+  moveReservedBalance(
+    command: ReservedBalanceCommand,
+  ): Promise<ReservedBalanceCommandResult>;
+  getReservedBalance(userId: string): Promise<ReservedBalanceSnapshot>;
   listTransactions(input: {
     userId: string;
     bookmakerAccountId: string;

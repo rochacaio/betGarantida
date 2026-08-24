@@ -34,6 +34,14 @@ Tipos iniciais: `INITIAL_BALANCE`, `DEPOSIT`, `WITHDRAWAL`, `BET_STAKE`, `BET_RE
 
 O valor é assinado: entrada positiva e saída negativa. Lançamentos são imutáveis.
 
+### ReservedBalanceTransaction
+
+Ledger por usuário para dinheiro retirado de uma casa que permanece destinado a
+apostas. `FROM_BOOKMAKER` é positivo na reserva e gera `RESERVED_OUT` negativo
+na casa; `TO_BOOKMAKER` é negativo na reserva e gera `RESERVED_IN` positivo na
+casa. Os dois lançamentos são criados atomicamente e compartilham metadados de
+idempotência. O saldo reservado nunca pode ficar negativo.
+
 ### Operation
 
 `id`, `userId`, `sequenceNumber`, `type`, `eventName`, `notes`, `status`, `generatesBetCredit`, snapshots projetados e realizados, `version`, `openedAt`, `settledAt?`, timestamps.

@@ -7,6 +7,7 @@ import { ApiClientError } from "../lib/api/client";
 import { authApi, SessionUser } from "../features/auth/api";
 import {
   ApiBookmaker,
+  ApiReservedBalance,
   ApiWalletTransaction,
   bookmakersApi,
 } from "../features/bookmakers/api";
@@ -1007,6 +1008,29 @@ function Bookmakers({
   const [transferDestinationId, setTransferDestinationId] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
   const [transferDescription, setTransferDescription] = useState("");
+  const [reservedBalance, setReservedBalance] =
+    useState<ApiReservedBalance>();
+  const [reservedModal, setReservedModal] = useState<
+    "FROM_BOOKMAKER" | "TO_BOOKMAKER"
+  >();
+  const [reservedBookmakerId, setReservedBookmakerId] = useState("");
+  const [reservedAmount, setReservedAmount] = useState("");
+  const [reservedDescription, setReservedDescription] = useState("");
+  const [reservedHistoryOpen, setReservedHistoryOpen] = useState(false);
+  const loadReservedBalance = useCallback(async () => {
+    try {
+      setReservedBalance(await bookmakersApi.reservedBalance());
+    } catch (failure) {
+      showToast(
+        "error",
+        "Erro ao carregar saldo reservado",
+        errorMessage(failure, "Não foi possível carregar a carteira reservada."),
+      );
+    }
+  }, []);
+  useEffect(() => {
+    void Promise.resolve().then(loadReservedBalance);
+  }, [loadReservedBalance]);
   const add = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -1198,6 +1222,42 @@ function Bookmakers({
       setSaving(false);
     }
   };
+  const submitReservedBalance = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!reservedModal) return;
+    setSaving(true);
+    setError("");
+    try {
+      await bookmakersApi.moveReservedBalance(
+        reservedModal,
+        reservedBookmakerId,
+        Number(reservedAmount).toFixed(2),
+        reservedDescription || undefined,
+      );
+      const wasReserve = reservedModal === "FROM_BOOKMAKER";
+      setReservedModal(undefined);
+      setReservedBookmakerId("");
+      setReservedAmount("");
+      setReservedDescription("");
+      await Promise.all([onRefresh(), loadReservedBalance()]);
+      showToast(
+        "success",
+        wasReserve ? "Saldo reservado" : "Saldo enviado para a casa",
+        wasReserve
+          ? "O valor saiu da casa e está disponível na carteira reservada."
+          : "O valor reservado foi creditado na casa selecionada.",
+      );
+    } catch (failure) {
+      const message = errorMessage(
+        failure,
+        "Não foi possível movimentar o saldo reservado.",
+      );
+      setError(message);
+      showToast("error", "Erro no saldo reservado", message);
+    } finally {
+      setSaving(false);
+    }
+  };
   const visibleTransactions = transactions.filter((transaction) =>
     transactionMatchesStatementTab(transaction, statementTab),
   );
@@ -1244,9 +1304,83 @@ function Bookmakers({
           </div>
           <div>
             <span>Patrimônio total</span>
-            <strong>{money.format(total + totalOpen)}</strong>
+            <strong>
+              {money.format(
+                total + totalOpen + Number(reservedBalance?.balance ?? 0),
+              )}
+            </strong>
           </div>
         </div>
+        <article className="reserved-balance-card">
+          <div>
+            <span className="card-label">CARTEIRA DE TRÂNSITO</span>
+            <h2>Saldo reservado</h2>
+            <p>
+              Dinheiro retirado das casas que continuará sendo usado em apostas.
+            </p>
+          </div>
+          <div className="reserved-balance-value">
+            <span>Disponível para enviar</span>
+            <strong>{money.format(Number(reservedBalance?.balance ?? 0))}</strong>
+          </div>
+          <div className="reserved-balance-actions">
+            <button
+              className="secondary"
+              onClick={() => setReservedModal("FROM_BOOKMAKER")}
+            >
+              Reservar saldo de uma casa
+            </button>
+            <button
+              className="primary"
+              disabled={Number(reservedBalance?.balance ?? 0) <= 0}
+              onClick={() => setReservedModal("TO_BOOKMAKER")}
+            >
+              Enviar saldo para uma casa
+            </button>
+            <button
+              className="text-button"
+              onClick={() => setReservedHistoryOpen((current) => !current)}
+            >
+              {reservedHistoryOpen ? "Ocultar histórico" : "Ver histórico"}
+            </button>
+          </div>
+        </article>
+        {reservedHistoryOpen && (
+          <article className="reserved-history">
+            <div className="section-heading compact-heading">
+              <div>
+                <span className="card-label">MOVIMENTAÇÕES</span>
+                <h2>Histórico do saldo reservado</h2>
+              </div>
+            </div>
+            {!reservedBalance?.transactions.length && (
+              <p className="muted">Nenhuma movimentação reservada ainda.</p>
+            )}
+            {reservedBalance?.transactions.map((transaction) => {
+              const bookmaker = bookmakers.find(
+                (item) => item.id === transaction.bookmakerAccountId,
+              );
+              const incoming = transaction.type === "FROM_BOOKMAKER";
+              return (
+                <div className="statement-row" key={transaction.id}>
+                  <div>
+                    <strong>
+                      {incoming ? "Reservado de" : "Enviado para"}{" "}
+                      {bookmaker ? bookmakerLabel(bookmaker) : "casa removida"}
+                    </strong>
+                    <small>
+                      {new Date(transaction.occurredAt).toLocaleString("pt-BR")}
+                    </small>
+                  </div>
+                  <strong className={incoming ? "positive-text" : "negative-text"}>
+                    {incoming ? "+ " : "− "}
+                    {money.format(Math.abs(Number(transaction.amount)))}
+                  </strong>
+                </div>
+              );
+            })}
+          </article>
+        )}
         <div className="section-heading">
           <div>
             <span className="card-label">SUAS CONTAS</span>
@@ -1514,6 +1648,92 @@ function Bookmakers({
           </form>
         </dialog>
       )}
+      {reservedModal && (
+        <dialog
+          open
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget)
+              setReservedModal(undefined);
+          }}
+        >
+          <form className="modal" onSubmit={submitReservedBalance}>
+            <div className="modal-head">
+              <div>
+                <span className="card-label">SALDO RESERVADO</span>
+                <h2>
+                  {reservedModal === "FROM_BOOKMAKER"
+                    ? "Reservar saldo de uma casa"
+                    : "Enviar saldo para uma casa"}
+                </h2>
+              </div>
+              <button type="button" onClick={() => setReservedModal(undefined)}>
+                ×
+              </button>
+            </div>
+            <p>
+              {reservedModal === "FROM_BOOKMAKER"
+                ? "O valor será retirado da casa, mas continuará contabilizado como dinheiro destinado às apostas."
+                : `Disponível na carteira reservada: ${money.format(Number(reservedBalance?.balance ?? 0))}.`}
+            </p>
+            <Field label="Casa de aposta">
+              <select
+                required
+                value={reservedBookmakerId}
+                onChange={(event) => setReservedBookmakerId(event.target.value)}
+              >
+                <option value="">Selecione a casa</option>
+                {bookmakers
+                  .filter((item) => item.status === "ACTIVE")
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {bookmakerLabel(item)} · {money.format(item.balance)}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+            <Field label="Valor">
+              <div className="money-input">
+                <span>R$</span>
+                <input
+                  required
+                  type="number"
+                  min="0.01"
+                  max={
+                    reservedModal === "TO_BOOKMAKER"
+                      ? Number(reservedBalance?.balance ?? 0)
+                      : undefined
+                  }
+                  step="0.01"
+                  value={reservedAmount}
+                  onChange={(event) => setReservedAmount(event.target.value)}
+                />
+              </div>
+            </Field>
+            <Field label="Descrição opcional">
+              <input
+                maxLength={240}
+                value={reservedDescription}
+                onChange={(event) => setReservedDescription(event.target.value)}
+                placeholder="Ex.: saldo aguardando oportunidade"
+              />
+            </Field>
+            {error && <p className="negative-text">{error}</p>}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setReservedModal(undefined)}
+              >
+                Cancelar
+              </button>
+              <button className="primary" disabled={saving}>
+                {saving ? "Salvando..." : "Confirmar movimentação"}
+              </button>
+            </div>
+          </form>
+        </dialog>
+      )}
       {selected && !action && (
         <dialog
           open
@@ -1727,6 +1947,8 @@ const transactionLabels: Record<string, string> = {
   BONUS_RECEIVED: "Ganho grátis",
   BONUS_USED: "Crédito utilizado",
   ADJUSTMENT: "Ajuste manual",
+  RESERVED_OUT: "Enviado para saldo reservado",
+  RESERVED_IN: "Recebido do saldo reservado",
 };
 const transactionLabel = (transaction: ApiWalletTransaction) => {
   if (transaction.activity === "BET_EDIT_REFUND")
@@ -1757,7 +1979,8 @@ type StatementTab =
   | "winnings"
   | "free-winnings"
   | "refunds"
-  | "transfers";
+  | "transfers"
+  | "reserved";
 
 const statementTabs: { id: StatementTab; label: string }[] = [
   { id: "all", label: "Tudo" },
@@ -1767,6 +1990,7 @@ const statementTabs: { id: StatementTab; label: string }[] = [
   { id: "free-winnings", label: "Ganhos grátis" },
   { id: "refunds", label: "Dinheiro retornado" },
   { id: "transfers", label: "Transferências" },
+  { id: "reserved", label: "Saldo reservado" },
 ];
 
 const statementTabTypes: Record<StatementTab, string[]> = {
@@ -1777,6 +2001,7 @@ const statementTabTypes: Record<StatementTab, string[]> = {
   "free-winnings": ["BONUS_RECEIVED"],
   refunds: ["BET_REFUND"],
   transfers: ["TRANSFER_IN", "TRANSFER_OUT"],
+  reserved: ["RESERVED_OUT", "RESERVED_IN"],
 };
 
 const transactionMatchesStatementTab = (
@@ -1792,6 +2017,7 @@ const statementEmptyMessages: Record<StatementTab, string> = {
   "free-winnings": "Prêmios, giros e outros ganhos gratuitos aparecerão aqui.",
   refunds: "Valores devolvidos por exclusões ou cancelamentos aparecerão aqui.",
   transfers: "Transferências recebidas e enviadas aparecerão aqui.",
+  reserved: "Movimentações entre esta casa e o saldo reservado aparecerão aqui.",
 };
 
 const transferCounterparty = (

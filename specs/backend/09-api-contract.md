@@ -34,6 +34,9 @@ POST /bookmaker-accounts/:id/free-winnings
 POST /bookmaker-accounts/:id/withdrawals
 POST /bookmaker-accounts/:id/adjustments
 POST /bookmaker-accounts/transfers
+GET  /bookmaker-accounts/reserved-balance
+POST /bookmaker-accounts/reserved-balance/from-bookmaker
+POST /bookmaker-accounts/reserved-balance/to-bookmaker
 PATCH /operations/:id/generated-credit
 
 POST /operations/preview

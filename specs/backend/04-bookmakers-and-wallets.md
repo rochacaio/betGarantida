@@ -8,6 +8,8 @@
 - Consultar extrato paginado.
 - Transferir saldo entre duas casas ativas do mesmo usuário.
 - Exibir saldo disponível, valor em apostas abertas e patrimônio por casa.
+- Manter saldo reservado de trânsito para valores retirados de uma casa que
+  continuam destinados a futuras apostas.
 
 ## Ledger
 
@@ -38,6 +40,10 @@ O `cachedBalance` pode acelerar leituras, mas é atualizado na mesma transação
 - Transferências entre contas de titulares diferentes são permitidas desde que
   ambas pertençam ao mesmo usuário gestor, estejam ativas e atendam às regras
   de saldo.
+- Reservar saldo não é saque pessoal: debita a casa e credita o ledger reservado
+  na mesma transação. Enviar a reserva a outra casa faz o movimento inverso.
+  Ambos os lados aparecem nos respectivos históricos e nenhum saldo pode ficar
+  negativo.
 
 ## Efeitos das operações
 

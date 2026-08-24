@@ -12,6 +12,7 @@ import {
   BookmakerAccountRecord,
   CreateAccountCommand,
   FinancialCommand,
+  ReservedBalanceCommand,
   TransferCommand,
   WalletRepository,
   WalletTransactionRecord,
@@ -19,6 +20,7 @@ import {
 
 class MemoryWalletRepository implements WalletRepository {
   balance = new Prisma.Decimal(0);
+  reservedBalance = new Prisma.Decimal(0);
   requests = new Map<string, { hash: string; result: any }>();
   lastFinancialCommand?: FinancialCommand;
 
@@ -91,6 +93,36 @@ class MemoryWalletRepository implements WalletRepository {
       result: { ...result, replayed: true },
     });
     return Promise.resolve(result);
+  }
+
+  moveReservedBalance(command: ReservedBalanceCommand) {
+    const fromBookmaker = command.direction === "FROM_BOOKMAKER";
+    this.balance = this.balance.add(
+      fromBookmaker ? command.amount.negated() : command.amount,
+    );
+    this.reservedBalance = this.reservedBalance.add(
+      fromBookmaker ? command.amount : command.amount.negated(),
+    );
+    return Promise.resolve({
+      transactionId: "33333333-3333-4333-8333-333333333333",
+      transactionType: fromBookmaker
+        ? ("FROM_BOOKMAKER" as const)
+        : ("TO_BOOKMAKER" as const),
+      bookmakerTransaction: this.transaction(
+        fromBookmaker
+          ? WalletTransactionType.RESERVED_OUT
+          : WalletTransactionType.RESERVED_IN,
+        fromBookmaker ? command.amount.negated() : command.amount,
+      ),
+      reservedBalance: this.reservedBalance,
+      bookmakerBalance: this.balance,
+      replayed: false,
+      requestHash: command.requestHash,
+    });
+  }
+
+  getReservedBalance() {
+    return Promise.resolve({ balance: this.reservedBalance, transactions: [] });
   }
 
   listTransactions() {
@@ -263,6 +295,36 @@ describe("WalletService", () => {
       idempotentReplay: false,
     });
     expect(repository.balance.toFixed(2)).toBe("124.50");
+  });
+
+  it("moves money from a bookmaker into the reserved balance", async () => {
+    repository.balance = new Prisma.Decimal("100.00");
+    const result = await service.moveReservedBalance({
+      userId: "user-1",
+      bookmakerAccountId: "11111111-1111-4111-8111-111111111111",
+      direction: "FROM_BOOKMAKER",
+      amount: "30.00",
+      idempotencyKey: "reserve-from-bookmaker",
+    });
+    expect(result).toMatchObject({
+      bookmakerBalance: "70.00",
+      reservedBalance: "30.00",
+    });
+  });
+
+  it("moves reserved money into a bookmaker", async () => {
+    repository.reservedBalance = new Prisma.Decimal("30.00");
+    const result = await service.moveReservedBalance({
+      userId: "user-1",
+      bookmakerAccountId: "11111111-1111-4111-8111-111111111111",
+      direction: "TO_BOOKMAKER",
+      amount: "20.00",
+      idempotencyKey: "reserve-to-bookmaker",
+    });
+    expect(result).toMatchObject({
+      bookmakerBalance: "20.00",
+      reservedBalance: "10.00",
+    });
   });
 
   it("rejects transfers to the same bookmaker account", async () => {

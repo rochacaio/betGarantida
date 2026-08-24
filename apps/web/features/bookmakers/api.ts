@@ -21,6 +21,17 @@ export type ApiWalletTransaction = {
   activity?: "BET_EDIT_REFUND" | "BET_CANCEL_REFUND" | "BET_EDIT_STAKE";
   betType?: "BACK" | "LAY";
 };
+export type ApiReservedBalance = {
+  balance: string;
+  transactions: Array<{
+    id: string;
+    bookmakerAccountId: string;
+    type: "FROM_BOOKMAKER" | "TO_BOOKMAKER";
+    amount: string;
+    occurredAt: string;
+    metadata?: unknown;
+  }>;
+};
 export const bookmakersApi = {
   list: () => api<{ data: ApiBookmaker[] }>("/bookmaker-accounts"),
   create: (name: string, ownerName: string | undefined, initialBalance: string) =>
@@ -86,4 +97,26 @@ export const bookmakersApi = {
         description,
       }),
     }),
+  reservedBalance: () =>
+    api<ApiReservedBalance>("/bookmaker-accounts/reserved-balance"),
+  moveReservedBalance: (
+    direction: "FROM_BOOKMAKER" | "TO_BOOKMAKER",
+    bookmakerAccountId: string,
+    amount: string,
+    description?: string,
+  ) =>
+    api(
+      `/bookmaker-accounts/reserved-balance/${
+        direction === "FROM_BOOKMAKER" ? "from-bookmaker" : "to-bookmaker"
+      }`,
+      {
+        method: "POST",
+        headers: commandHeaders(),
+        body: JSON.stringify({
+          bookmakerAccountId,
+          amount,
+          description,
+        }),
+      },
+    ),
 };

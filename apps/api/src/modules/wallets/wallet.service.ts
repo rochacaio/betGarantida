@@ -210,6 +210,81 @@ export class WalletService {
     return this.repository.reconcileUser(userId);
   }
 
+  async getReservedBalance(userId: string) {
+    const result = await this.repository.getReservedBalance(userId);
+    return {
+      balance: result.balance.toFixed(2),
+      transactions: result.transactions.map((transaction) => ({
+        id: transaction.id,
+        bookmakerAccountId: transaction.bookmakerAccountId,
+        type: transaction.type,
+        amount: transaction.amount.toFixed(2),
+        occurredAt: transaction.occurredAt.toISOString(),
+        metadata: transaction.metadata,
+      })),
+    };
+  }
+
+  moveReservedBalance(input: {
+    userId: string;
+    bookmakerAccountId: string;
+    direction: "FROM_BOOKMAKER" | "TO_BOOKMAKER";
+    amount: string;
+    description?: string;
+    idempotencyKey: string;
+  }) {
+    this.assertIdempotencyKey(input.idempotencyKey);
+    const amount = this.money(input.amount);
+    if (!amount.isPositive())
+      throw new UnprocessableEntityException("Valor inválido.");
+    const requestHash = this.requestHash([
+      "RESERVED_BALANCE",
+      input.direction,
+      input.bookmakerAccountId,
+      amount.toFixed(2),
+      input.description ?? "",
+    ]);
+    return this.executeReserved({ ...input, amount, requestHash });
+  }
+
+  private async executeReserved(input: {
+    userId: string;
+    bookmakerAccountId: string;
+    direction: "FROM_BOOKMAKER" | "TO_BOOKMAKER";
+    amount: Prisma.Decimal;
+    description?: string;
+    idempotencyKey: string;
+    requestHash: string;
+  }) {
+    try {
+      const result = await this.repository.moveReservedBalance(input);
+      this.assertReplayMatches(result.requestHash, input.requestHash);
+      return {
+        transactionId: result.transactionId,
+        direction: input.direction,
+        amount: input.amount.toFixed(2),
+        reservedBalance: result.reservedBalance.toFixed(2),
+        bookmakerBalance: result.bookmakerBalance.toFixed(2),
+        idempotentReplay: result.replayed,
+      };
+    } catch (error) {
+      if (error instanceof WalletAccountNotFoundError)
+        throw new NotFoundException("Casa de aposta não encontrada.");
+      if (error instanceof WalletAccountArchivedError)
+        throw new ConflictException("A casa de aposta está arquivada.");
+      if (error instanceof WalletInsufficientBalanceError) {
+        throw new UnprocessableEntityException({
+          code: "INSUFFICIENT_BALANCE",
+          message:
+            input.direction === "FROM_BOOKMAKER"
+              ? "Saldo insuficiente na casa de aposta."
+              : "Saldo reservado insuficiente.",
+        });
+      }
+      throw error;
+    }
+  }
+
   private apply(input: {
     userId: string;
     bookmakerAccountId: string;

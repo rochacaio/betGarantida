@@ -14,6 +14,7 @@ describe("Prisma domain schema", () => {
     "AuthRateLimit",
     "BookmakerAccount",
     "WalletTransaction",
+    "ReservedBalanceTransaction",
     "Operation",
     "BetLeg",
     "BetCredit",

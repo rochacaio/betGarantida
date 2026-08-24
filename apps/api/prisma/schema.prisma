@@ -31,6 +31,13 @@ enum WalletTransactionType {
   BONUS_RECEIVED
   BONUS_USED
   ADJUSTMENT
+  RESERVED_OUT
+  RESERVED_IN
+}
+
+enum ReservedBalanceTransactionType {
+  FROM_BOOKMAKER
+  TO_BOOKMAKER
 }
 
 enum OperationType {
@@ -71,22 +78,23 @@ enum AuthRateLimitAction {
 }
 
 model User {
-  id                  String               @id @default(uuid()) @db.Uuid
-  email               String               @unique @db.VarChar(320)
-  cpfHash             String               @unique @map("cpf_hash") @db.VarChar(64)
-  cpfEncrypted        String               @map("cpf_encrypted") @db.Text
-  passwordHash        String               @map("password_hash") @db.Text
-  status              UserStatus           @default(ACTIVE)
-  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
-  sessions            Session[]
-  passwordResetTokens PasswordResetToken[]
-  bookmakerAccounts   BookmakerAccount[]
-  walletTransactions  WalletTransaction[]
-  operations          Operation[]
-  betCredits          BetCredit[]
-  auditLogs           AuditLog[]
-  operationMutations  OperationMutation[]
+  id                          String                       @id @default(uuid()) @db.Uuid
+  email                       String                       @unique @db.VarChar(320)
+  cpfHash                     String                       @unique @map("cpf_hash") @db.VarChar(64)
+  cpfEncrypted                String                       @map("cpf_encrypted") @db.Text
+  passwordHash                String                       @map("password_hash") @db.Text
+  status                      UserStatus                   @default(ACTIVE)
+  createdAt                   DateTime                     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                   DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  sessions                    Session[]
+  passwordResetTokens         PasswordResetToken[]
+  bookmakerAccounts           BookmakerAccount[]
+  walletTransactions          WalletTransaction[]
+  operations                  Operation[]
+  betCredits                  BetCredit[]
+  auditLogs                   AuditLog[]
+  operationMutations          OperationMutation[]
+  reservedBalanceTransactions ReservedBalanceTransaction[]
 
   @@map("users")
 }
@@ -134,20 +142,21 @@ model AuthRateLimit {
 }
 
 model BookmakerAccount {
-  id                 String                 @id @default(uuid()) @db.Uuid
-  userId             String                 @map("user_id") @db.Uuid
-  name               String                 @db.VarChar(120)
-  ownerName          String?                @map("owner_name") @db.VarChar(120)
-  nickname           String?                @db.VarChar(120)
-  currency           String                 @default("BRL") @db.Char(3)
-  status             BookmakerAccountStatus @default(ACTIVE)
-  cachedBalance      Decimal                @default(0) @map("cached_balance") @db.Decimal(19, 2)
-  version            Int                    @default(1)
-  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
-  user               User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
-  walletTransactions WalletTransaction[]
-  betLegs            BetLeg[]
+  id                          String                       @id @default(uuid()) @db.Uuid
+  userId                      String                       @map("user_id") @db.Uuid
+  name                        String                       @db.VarChar(120)
+  ownerName                   String?                      @map("owner_name") @db.VarChar(120)
+  nickname                    String?                      @db.VarChar(120)
+  currency                    String                       @default("BRL") @db.Char(3)
+  status                      BookmakerAccountStatus       @default(ACTIVE)
+  cachedBalance               Decimal                      @default(0) @map("cached_balance") @db.Decimal(19, 2)
+  version                     Int                          @default(1)
+  createdAt                   DateTime                     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                   DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user                        User                         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  walletTransactions          WalletTransaction[]
+  betLegs                     BetLeg[]
+  reservedBalanceTransactions ReservedBalanceTransaction[]
 
   @@index([userId, status])
   @@index([userId, ownerName, status])
@@ -176,6 +185,25 @@ model WalletTransaction {
   @@index([operationId])
   @@index([legId])
   @@map("wallet_transactions")
+}
+
+model ReservedBalanceTransaction {
+  id                 String                         @id @default(uuid()) @db.Uuid
+  userId             String                         @map("user_id") @db.Uuid
+  bookmakerAccountId String                         @map("bookmaker_account_id") @db.Uuid
+  type               ReservedBalanceTransactionType
+  amount             Decimal                        @db.Decimal(19, 2)
+  idempotencyKey     String                         @map("idempotency_key") @db.VarChar(160)
+  occurredAt         DateTime                       @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  metadata           Json?
+  createdAt          DateTime                       @default(now()) @map("created_at") @db.Timestamptz(3)
+  user               User                           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  bookmakerAccount   BookmakerAccount               @relation(fields: [bookmakerAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, occurredAt])
+  @@index([bookmakerAccountId, occurredAt], map: "reserved_balance_bookmaker_occurred_idx")
+  @@map("reserved_balance_transactions")
 }
 
 model Operation {
@@ -222,9 +250,9 @@ model BetLeg {
   groupPosition      Int                 @default(0) @map("group_position")
   bookmakerAccountId String              @map("bookmaker_account_id") @db.Uuid
   betCreditId        String?             @unique @map("bet_credit_id") @db.Uuid
-    position           Int
-    selectionName      String?             @map("selection_name") @db.VarChar(160)
-    betType            BetType             @default(BACK) @map("bet_type")
+  position           Int
+  selectionName      String?             @map("selection_name") @db.VarChar(160)
+  betType            BetType             @default(BACK) @map("bet_type")
   stake              Decimal             @db.Decimal(19, 2)
   riskAmount         Decimal             @map("risk_amount") @db.Decimal(19, 2)
   odd                Decimal             @db.Decimal(19, 6)

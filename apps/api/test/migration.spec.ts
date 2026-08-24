@@ -71,4 +71,23 @@ describe("Initial domain migration", () => {
     expect(nameMigration).toContain('ADD COLUMN "selection_name" VARCHAR(160)');
     expect(nameMigration).not.toContain("NOT NULL");
   });
+
+  it("adds an auditable reserved balance ledger", () => {
+    const reservedMigration = readFileSync(
+      join(
+        migrationsRoot,
+        "20260824010000_add_reserved_balance",
+        "migration.sql",
+      ),
+      "utf8",
+    );
+    expect(reservedMigration).toContain(
+      'CREATE TABLE "reserved_balance_transactions"',
+    );
+    expect(reservedMigration).toContain("FROM_BOOKMAKER");
+    expect(reservedMigration).toContain("TO_BOOKMAKER");
+    expect(reservedMigration).toContain(
+      'CONSTRAINT "reserved_balance_transactions_amount_check"',
+    );
+  });
 });
