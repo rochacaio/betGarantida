@@ -49,6 +49,11 @@ GET  /dashboard/monthly?month=2026-08
 GET  /health
 ```
 
+Na criação de uma casa, `ownerName` é opcional. Listagem, detalhe e edição
+também expõem esse campo; enviar uma string vazia na edição remove o titular. A
+interface usa `nome da casa · titular`, quando informado, para não confundir
+contas homônimas nas linhas de surebet e nas transferências.
+
 ## Exemplo de criação
 
 ```json

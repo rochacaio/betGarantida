@@ -12,6 +12,7 @@ export interface BookmakerAccountsRepository {
     id: string;
     version: number;
     name?: string;
+    ownerName?: string | null;
     nickname?: string | null;
     status?: BookmakerAccountStatus;
   }): Promise<

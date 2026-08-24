@@ -106,6 +106,7 @@ class MemoryWalletRepository implements WalletRepository {
       id: "11111111-1111-4111-8111-111111111111",
       userId: "user-1",
       name: "Bet365",
+      ownerName: "Caio",
       nickname: null,
       currency: "BRL",
       status: BookmakerAccountStatus.ACTIVE,
@@ -146,11 +147,13 @@ describe("WalletService", () => {
     const result = await service.createAccount({
       userId: "user-1",
       name: "Bet365",
+      ownerName: "Caio",
       currency: "BRL",
       initialBalance: "100.50",
       idempotencyKey: "create-account-1",
     });
     expect(result.account).toMatchObject({
+      ownerName: "Caio",
       availableBalance: "100.50",
       openStake: "0.00",
       equity: "100.50",

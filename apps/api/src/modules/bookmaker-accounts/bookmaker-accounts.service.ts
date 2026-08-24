@@ -29,6 +29,7 @@ export class BookmakerAccountsService {
     return this.wallets.createAccount({
       userId,
       name: dto.name.trim(),
+      ownerName: dto.ownerName?.trim() || undefined,
       nickname: dto.nickname?.trim() || undefined,
       currency: (dto.currency ?? "BRL").toUpperCase(),
       initialBalance: dto.initialBalance,
@@ -53,6 +54,9 @@ export class BookmakerAccountsService {
       id,
       version: dto.version,
       ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+      ...(dto.ownerName !== undefined
+        ? { ownerName: dto.ownerName.trim() || null }
+        : {}),
       ...(dto.nickname !== undefined
         ? { nickname: dto.nickname.trim() || null }
         : {}),
@@ -75,6 +79,7 @@ export class BookmakerAccountsService {
   private response(account: {
     id: string;
     name: string;
+    ownerName: string | null;
     nickname: string | null;
     currency: string;
     status: BookmakerAccountStatus;
@@ -87,6 +92,7 @@ export class BookmakerAccountsService {
     return {
       id: account.id,
       name: account.name,
+      ownerName: account.ownerName,
       nickname: account.nickname,
       currency: account.currency,
       status: account.status,

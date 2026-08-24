@@ -3,6 +3,7 @@ import { api, commandHeaders } from "../../lib/api/client";
 export type ApiBookmaker = {
   id: string;
   name: string;
+  ownerName: string | null;
   nickname: string | null;
   status: string;
   availableBalance: string;
@@ -22,11 +23,11 @@ export type ApiWalletTransaction = {
 };
 export const bookmakersApi = {
   list: () => api<{ data: ApiBookmaker[] }>("/bookmaker-accounts"),
-  create: (name: string, initialBalance: string) =>
+  create: (name: string, ownerName: string | undefined, initialBalance: string) =>
     api<{ account: ApiBookmaker }>("/bookmaker-accounts", {
       method: "POST",
       headers: commandHeaders(),
-      body: JSON.stringify({ name, initialBalance, currency: "BRL" }),
+      body: JSON.stringify({ name, ownerName, initialBalance, currency: "BRL" }),
     }),
   transactions: (id: string) =>
     api<{ data: ApiWalletTransaction[] }>(
@@ -34,7 +35,12 @@ export const bookmakersApi = {
     ),
   update: (
     account: { id: string; version: number },
-    input: { name?: string; nickname?: string; status?: "ACTIVE" | "ARCHIVED" },
+    input: {
+      name?: string;
+      ownerName?: string;
+      nickname?: string;
+      status?: "ACTIVE" | "ARCHIVED";
+    },
   ) =>
     api<{ account: ApiBookmaker }>(`/bookmaker-accounts/${account.id}`, {
       method: "PATCH",

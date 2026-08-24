@@ -20,6 +20,12 @@ export class CreateBookmakerAccountDto {
   @IsOptional()
   @IsString()
   @MaxLength(120)
+  ownerName?: string;
+
+  @Transform(trimString)
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
   nickname?: string;
 
   @Transform(trimString)

@@ -43,6 +43,7 @@ export class PrismaBookmakerAccountsRepository
     id: string;
     version: number;
     name?: string;
+    ownerName?: string | null;
     nickname?: string | null;
     status?: BookmakerAccountStatus;
   }): Promise<
@@ -53,6 +54,9 @@ export class PrismaBookmakerAccountsRepository
       where: { id: input.id, userId: input.userId, version: input.version },
       data: {
         ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.ownerName !== undefined
+          ? { ownerName: input.ownerName }
+          : {}),
         ...(input.nickname !== undefined ? { nickname: input.nickname } : {}),
         ...(input.status !== undefined ? { status: input.status } : {}),
         version: { increment: 1 },

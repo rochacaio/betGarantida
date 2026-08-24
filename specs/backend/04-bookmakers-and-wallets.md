@@ -2,7 +2,7 @@
 
 ## Casos de uso
 
-- Cadastrar conta de casa com nome, apelido opcional e saldo inicial.
+- Cadastrar conta de casa com nome, titular, apelido opcional e saldo inicial.
 - Listar e editar metadados da conta.
 - Registrar depósito, saque e ajuste explícito.
 - Consultar extrato paginado.
@@ -32,6 +32,12 @@ O `cachedBalance` pode acelerar leituras, mas é atualizado na mesma transação
 - Ajuste exige motivo e gera auditoria.
 - Ajuste define o saldo final informado; o ledger registra somente a diferença entre o saldo anterior e o novo. Depósito soma e saque subtrai.
 - Uma operação com várias pernas na mesma casa soma todas as stakes em dinheiro antes da validação.
+- Contas da mesma casa podem pertencer a titulares diferentes. A seleção das
+  pernas e toda movimentação financeira continuam vinculadas ao ID da conta,
+  nunca apenas ao nome da casa ou do titular.
+- Transferências entre contas de titulares diferentes são permitidas desde que
+  ambas pertençam ao mesmo usuário gestor, estejam ativas e atendam às regras
+  de saldo.
 
 ## Efeitos das operações
 

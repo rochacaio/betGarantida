@@ -137,6 +137,7 @@ model BookmakerAccount {
   id                 String                 @id @default(uuid()) @db.Uuid
   userId             String                 @map("user_id") @db.Uuid
   name               String                 @db.VarChar(120)
+  ownerName          String?                @map("owner_name") @db.VarChar(120)
   nickname           String?                @db.VarChar(120)
   currency           String                 @default("BRL") @db.Char(3)
   status             BookmakerAccountStatus @default(ACTIVE)
@@ -149,6 +150,7 @@ model BookmakerAccount {
   betLegs            BetLeg[]
 
   @@index([userId, status])
+  @@index([userId, ownerName, status])
   @@map("bookmaker_accounts")
 }
 

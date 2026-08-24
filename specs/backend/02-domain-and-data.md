@@ -18,7 +18,13 @@ Tokens são armazenados somente como hash, possuem expiração, revogação e da
 
 ### BookmakerAccount
 
-`id`, `userId`, `name`, `nickname`, `currency`, `status`, `cachedBalance`, `version`, timestamps.
+`id`, `userId`, `name`, `ownerName?`, `nickname`, `currency`, `status`, `cachedBalance`, `version`, timestamps.
+
+`ownerName` identifica o titular da conta na casa dentro do usuário gestor. Ele
+permite manter, por exemplo, `Superbet · Caio` e `Superbet · Cauã` como contas
+independentes. O campo é opcional para preservar contas históricas e fluxos
+simples, pode ser preenchido ou removido pela edição, mas seu uso é recomendado
+quando o gestor administra contas de mais de uma pessoa.
 
 ### WalletTransaction
 

@@ -29,6 +29,7 @@ type Screen =
 type Bookmaker = {
   id: string;
   name: string;
+  ownerName: string | null;
   balance: number;
   openStake: number;
   equity: number;
@@ -115,6 +116,7 @@ const colors = ["#f4c542", "#ff6a2a", "#ec3d57", "#4e8cff", "#a469ff"];
 const mapBookmaker = (item: ApiBookmaker, index: number): Bookmaker => ({
   id: item.id,
   name: item.nickname || item.name,
+  ownerName: item.ownerName,
   balance: Number(item.availableBalance),
   openStake: Number(item.openStake),
   equity: Number(item.equity),
@@ -122,6 +124,10 @@ const mapBookmaker = (item: ApiBookmaker, index: number): Bookmaker => ({
   status: item.status as "ACTIVE" | "ARCHIVED",
   color: colors[index % colors.length]!,
 });
+const bookmakerLabel = (bookmaker: Pick<Bookmaker, "name" | "ownerName">) =>
+  bookmaker.ownerName
+    ? `${bookmaker.name} · ${bookmaker.ownerName}`
+    : bookmaker.name;
 const mapOperation = (item: ApiOperation): Surebet => ({
   id: item.id,
   title: `Arbitragem #${item.sequenceNumber}`,
@@ -758,7 +764,7 @@ function Dashboard({
                   >
                     {b.name.slice(0, 2).toUpperCase()}
                   </span>
-                  <strong>{b.name}</strong>
+                  <strong>{bookmakerLabel(b)}</strong>
                   <span>{money.format(b.balance)}</span>
                 </div>
               ))}
@@ -976,11 +982,12 @@ function Bookmakers({
   onRefresh,
 }: {
   bookmakers: Bookmaker[];
-  onAdd: (name: string, balance: string) => Promise<void>;
+  onAdd: (name: string, ownerName: string, balance: string) => Promise<void>;
   onRefresh: () => Promise<void>;
 }) {
   const [modal, setModal] = useState(false);
   const [name, setName] = useState("");
+  const [ownerName, setOwnerName] = useState("");
   const [balance, setBalance] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -994,6 +1001,7 @@ function Bookmakers({
   const [actionAmount, setActionAmount] = useState("");
   const [actionReason, setActionReason] = useState("");
   const [actionName, setActionName] = useState("");
+  const [actionOwnerName, setActionOwnerName] = useState("");
   const [transferModal, setTransferModal] = useState(false);
   const [transferSourceId, setTransferSourceId] = useState("");
   const [transferDestinationId, setTransferDestinationId] = useState("");
@@ -1004,8 +1012,9 @@ function Bookmakers({
     setSaving(true);
     setError("");
     try {
-      await onAdd(name, balance || "0");
+      await onAdd(name, ownerName, balance || "0");
       setName("");
+      setOwnerName("");
       setBalance("");
       setModal(false);
       showToast(
@@ -1052,6 +1061,7 @@ function Bookmakers({
     setActionAmount("");
     setActionReason("");
     setActionName(bookmaker.name);
+    setActionOwnerName(bookmaker.ownerName ?? "");
     setError("");
     setMenuId(undefined);
   };
@@ -1062,7 +1072,10 @@ function Bookmakers({
     setError("");
     try {
       if (action === "edit")
-        await bookmakersApi.update(selected, { name: actionName });
+        await bookmakersApi.update(selected, {
+          name: actionName,
+          ownerName: actionOwnerName,
+        });
       else if (action === "deposit")
         await bookmakersApi.deposit(
           selected.id,
@@ -1306,6 +1319,9 @@ function Bookmakers({
                 </div>
               </div>
               <h3>{b.name}</h3>
+              <span className="bookmaker-owner">
+                Titular: {b.ownerName ?? "não informado"}
+              </span>
               <span className="muted">
                 {b.status === "ARCHIVED" ? "Conta arquivada" : "Conta ativa"}
               </span>
@@ -1359,6 +1375,15 @@ function Bookmakers({
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Ex.: Bet365"
               />
+            </Field>
+            <Field label="Dono da conta">
+              <input
+                maxLength={120}
+                value={ownerName}
+                onChange={(e) => setOwnerName(e.target.value)}
+                placeholder="Opcional, ex.: Caio"
+              />
+              <small>Recomendado para diferenciar contas da mesma casa.</small>
             </Field>
             <Field label="Saldo inicial">
               <div className="money-input">
@@ -1427,7 +1452,7 @@ function Bookmakers({
                   .filter((item) => item.status === "ACTIVE")
                   .map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.name} Â· {money.format(item.balance)}
+                      {bookmakerLabel(item)} · {money.format(item.balance)}
                     </option>
                   ))}
               </select>
@@ -1448,7 +1473,7 @@ function Bookmakers({
                   )
                   .map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.name}
+                      {bookmakerLabel(item)}
                     </option>
                   ))}
               </select>
@@ -1502,6 +1527,7 @@ function Bookmakers({
               <div>
                 <span className="card-label">EXTRATO DA CONTA</span>
                 <h2>{selected.name}</h2>
+                <p>Titular: {selected.ownerName ?? "não informado"}</p>
                 <p>Saldo atual: {money.format(selected.balance)}</p>
               </div>
               <button
@@ -1604,13 +1630,26 @@ function Bookmakers({
               </button>
             </div>
             {action === "edit" ? (
-              <Field label="Nome da casa">
-                <input
-                  required
-                  value={actionName}
-                  onChange={(event) => setActionName(event.target.value)}
-                />
-              </Field>
+              <>
+                <Field label="Nome da casa">
+                  <input
+                    required
+                    value={actionName}
+                    onChange={(event) => setActionName(event.target.value)}
+                  />
+                </Field>
+                <Field label="Dono da conta">
+                  <input
+                    maxLength={120}
+                    value={actionOwnerName}
+                    onChange={(event) =>
+                      setActionOwnerName(event.target.value)
+                    }
+                    placeholder="Opcional, ex.: Caio"
+                  />
+                  <small>Deixe vazio para manter a conta sem titular.</small>
+                </Field>
+              </>
             ) : (
               <>
                 <Field
@@ -1772,7 +1811,10 @@ const transferCounterparty = (
   ];
   if (typeof id !== "string") return "outra casa";
   return (
-    bookmakers.find((bookmaker) => bookmaker.id === id)?.name ?? "outra casa"
+    (() => {
+      const bookmaker = bookmakers.find((item) => item.id === id);
+      return bookmaker ? bookmakerLabel(bookmaker) : "outra casa";
+    })()
   );
 };
 const transactionReason = (transaction: ApiWalletTransaction) => {
@@ -2126,7 +2168,7 @@ function LegRow({
               .filter((x) => x.status === "ACTIVE" || x.id === leg.bookmakerId)
               .map((x) => (
                 <option key={x.id} value={x.id}>
-                  {x.name} · {money.format(x.balance)}
+                  {bookmakerLabel(x)} · {money.format(x.balance)}
                 </option>
               ))}
           </select>
@@ -3223,8 +3265,16 @@ export default function Home() {
     setDashboard(undefined);
     setScreen("login");
   };
-  const addBookmaker = async (name: string, balance: string) => {
-    await bookmakersApi.create(name, Number(balance).toFixed(2));
+  const addBookmaker = async (
+    name: string,
+    ownerName: string,
+    balance: string,
+  ) => {
+    await bookmakersApi.create(
+      name,
+      ownerName.trim() || undefined,
+      Number(balance).toFixed(2),
+    );
     await refresh();
   };
   const deleteSurebet = async (surebet: Surebet) => {

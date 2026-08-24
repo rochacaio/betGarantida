@@ -38,6 +38,7 @@ export class WalletService {
     const requestHash = this.requestHash([
       "CREATE_ACCOUNT",
       input.name,
+      input.ownerName ?? "",
       input.nickname ?? "",
       input.currency,
       initialBalance.toFixed(2),
@@ -288,6 +289,7 @@ export class WalletService {
     return {
       id: account.id,
       name: account.name,
+      ownerName: account.ownerName,
       nickname: account.nickname,
       currency: account.currency,
       status: account.status,

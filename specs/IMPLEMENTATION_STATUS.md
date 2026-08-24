@@ -216,6 +216,9 @@ Status: implementada e validada por lint, typecheck e build de produção.
 - Após mutações financeiras, contas, operações e dashboard são recarregados; o frontend não altera saldos localmente.
 - Surebets em `WAITING_CREDIT_USE` permitem corrigir o valor concedido enquanto o crédito estiver disponível e sem reserva; a correção é auditada e versionada.
 - Mutações de autenticação, casas, saldos, transferências e surebets exibem toast de sucesso ou erro com a mensagem devolvida pela API.
+- Casas de aposta possuem titular editável. Cartões, extratos, dashboard,
+  seletores de surebet e transferências exibem `casa · titular`, e transferências
+  entre titulares diferentes do mesmo usuário gestor são suportadas.
 - Dados demonstrativos, `initialBookmakers`, `initialSurebets`, flags financeiras locais e `betgarantida-demo` foram removidos.
 - Estados iniciais de carregamento, listas vazias e erros de autenticação/mutação estão cobertos; `STALE_VERSION` preserva o drawer/rascunho porque a mutação rejeitada não desmonta o editor.
 - Rewrite por `API_ORIGIN` mantém cookies em mesma origem e está alinhado ao deploy na Vercel.

@@ -44,6 +44,7 @@ export class PrismaWalletRepository implements WalletRepository {
               data: {
                 userId: command.userId,
                 name: command.name,
+                ownerName: command.ownerName,
                 nickname: command.nickname,
                 currency: command.currency,
                 cachedBalance: command.initialBalance,

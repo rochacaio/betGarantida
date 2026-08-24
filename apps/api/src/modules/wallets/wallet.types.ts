@@ -9,6 +9,7 @@ export interface BookmakerAccountRecord {
   id: string;
   userId: string;
   name: string;
+  ownerName: string | null;
   nickname: string | null;
   currency: string;
   status: BookmakerAccountStatus;
@@ -71,6 +72,7 @@ export interface TransferCommandResult {
 export interface CreateAccountCommand {
   userId: string;
   name: string;
+  ownerName?: string;
   nickname?: string;
   currency: string;
   initialBalance: Decimal;
