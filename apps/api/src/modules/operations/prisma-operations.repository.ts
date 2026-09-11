@@ -950,6 +950,18 @@ export class PrismaOperationsRepository implements OperationsRepository {
             });
           }
 
+          if (operation.consumedCredits.length) {
+            await tx.betLeg.updateMany({
+              where: {
+                operationId: operation.id,
+                betCreditId: {
+                  in: operation.consumedCredits.map((credit) => credit.id),
+                },
+              },
+              data: { betCreditId: null },
+            });
+          }
+
           for (const credit of operation.consumedCredits) {
             await tx.betCredit.update({
               where: { id: credit.id },
@@ -1243,6 +1255,30 @@ export class PrismaOperationsRepository implements OperationsRepository {
         !credit.grantedAmount?.eq(leg.stake)
       )
         throw new OperationCreditUnavailableError();
+      const releasedLegacyLegs = await tx.betLeg.updateMany({
+        where: {
+          betCreditId: credit.id,
+          operation: {
+            userId: command.userId,
+            status: OperationStatus.CANCELLED,
+          },
+        },
+        data: { betCreditId: null },
+      });
+      if (releasedLegacyLegs.count > 0) {
+        await tx.auditLog.create({
+          data: {
+            userId: command.userId,
+            action: "BET_CREDIT_STALE_REFERENCE_RELEASED",
+            resourceType: "BET_CREDIT",
+            resourceId: credit.id,
+            metadata: {
+              requestId: currentRequestId() ?? "unknown",
+              releasedLegs: releasedLegacyLegs.count,
+            },
+          },
+        });
+      }
       if (credit.consumerOperationId === null) {
         const reserved = await tx.betCredit.updateMany({
           where: {

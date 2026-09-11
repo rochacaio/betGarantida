@@ -222,6 +222,10 @@ Status: implementada e validada por lint, typecheck e build de produção.
 - A aba de casas possui carteira de saldo reservado com ledger próprio. Valores
   podem sair atomicamente de uma casa para a reserva e depois entrar em qualquer
   casa ativa, sem serem classificados como saque pessoal.
+- A exclusão de surebet consumidora libera tanto a reserva do crédito quanto a
+  referência única mantida pela perna cancelada, permitindo reutilização segura.
+- Ao reutilizar crédito disponível, referências residuais de operações já
+  canceladas por versões anteriores são liberadas e auditadas automaticamente.
 - Dados demonstrativos, `initialBookmakers`, `initialSurebets`, flags financeiras locais e `betgarantida-demo` foram removidos.
 - Estados iniciais de carregamento, listas vazias e erros de autenticação/mutação estão cobertos; `STALE_VERSION` preserva o drawer/rascunho porque a mutação rejeitada não desmonta o editor.
 - Rewrite por `API_ORIGIN` mantém cookies em mesma origem e está alinhado ao deploy na Vercel.

@@ -53,6 +53,9 @@ O `cachedBalance` pode acelerar leituras, mas é atualizado na mesma transação
 - Criar: `BET_STAKE` negativo por perna em dinheiro.
 - Editar OPEN: `BET_REFUND` da reserva anterior e novo `BET_STAKE`, ambos vinculados à revisão; a transação valida o saldo final.
 - Cancelar OPEN: `BET_REFUND` por stake anteriormente reservada.
+- Excluir uma operação que consumia crédito remove a referência da perna
+  cancelada e devolve o crédito para `AVAILABLE`, permitindo utilizá-lo em uma
+  nova operação sem violar a unicidade de consumo.
 - Liquidar: `BET_RETURN` positivo para cada payout vencedor.
 - Consumir crédito: opcionalmente registrar `BONUS_USED` informativo, sem reduzir saldo em dinheiro.
 
