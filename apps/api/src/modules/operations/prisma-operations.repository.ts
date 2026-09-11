@@ -958,7 +958,11 @@ export class PrismaOperationsRepository implements OperationsRepository {
                   in: operation.consumedCredits.map((credit) => credit.id),
                 },
               },
-              data: { betCreditId: null },
+              data: {
+                betCreditId: null,
+                usesBetCredit: false,
+                usesFreeBetCredit: false,
+              },
             });
           }
 
@@ -1263,7 +1267,11 @@ export class PrismaOperationsRepository implements OperationsRepository {
             status: OperationStatus.CANCELLED,
           },
         },
-        data: { betCreditId: null },
+        data: {
+          betCreditId: null,
+          usesBetCredit: false,
+          usesFreeBetCredit: false,
+        },
       });
       if (releasedLegacyLegs.count > 0) {
         await tx.auditLog.create({

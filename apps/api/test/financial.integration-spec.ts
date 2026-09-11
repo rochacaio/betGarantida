@@ -218,17 +218,25 @@ run("operações financeiras com PostgreSQL real", () => {
     });
     expect(
       await prisma.betLeg.findFirstOrThrow({
-        where: { operationId: first.id, usesBetCredit: true },
+        where: { operationId: first.id, position: 0 },
       }),
-    ).toMatchObject({ betCreditId: null });
+    ).toMatchObject({
+      betCreditId: null,
+      usesBetCredit: false,
+      usesFreeBetCredit: false,
+    });
     expect(
       await prisma.betCredit.findUniqueOrThrow({ where: { id: credit.id } }),
     ).toMatchObject({ status: "AVAILABLE", consumerOperationId: null });
 
     // Simula o resíduo deixado por versões anteriores à correção.
     await prisma.betLeg.updateMany({
-      where: { operationId: first.id, usesBetCredit: true },
-      data: { betCreditId: credit.id },
+      where: { operationId: first.id, position: 0 },
+      data: {
+        betCreditId: credit.id,
+        usesBetCredit: true,
+        usesFreeBetCredit: false,
+      },
     });
 
     const second = await repository.create(
