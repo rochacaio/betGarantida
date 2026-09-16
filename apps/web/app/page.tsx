@@ -2095,6 +2095,15 @@ function Surebets({
     | "WAITING_CREDIT_USE"
     | "SETTLED";
   const [activeTab, setActiveTab] = useState<SurebetTab>("ALL");
+  type CreditFilter = "ALL" | "NONE" | "GENERATES" | "USES_LINKED" | "USES_FREE";
+  type ResultFilter = "ALL" | "POSITIVE" | "NEGATIVE" | "ZERO";
+  const [search, setSearch] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState("ALL");
+  const [selectedBookmaker, setSelectedBookmaker] = useState("ALL");
+  const [creditFilter, setCreditFilter] = useState<CreditFilter>("ALL");
+  const [resultFilter, setResultFilter] = useState<ResultFilter>("ALL");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [showOpenMetrics, setShowOpenMetrics] = useState(false);
   const matchesTab = (surebet: Surebet, tab: SurebetTab) => {
     if (tab === "ALL") return true;
     if (tab === "OPEN") return surebet.status === "OPEN";
@@ -2119,14 +2128,96 @@ function Surebets({
     { key: "WAITING_CREDIT_USE", label: "Aguardando crédito" },
     { key: "SETTLED", label: "Liquidadas" },
   ];
-  const filteredSurebets = surebets.filter((surebet) =>
+  const normalizedSearch = search
+    .trim()
+    .toLocaleLowerCase("pt-BR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  const availableMonths = Array.from(
+    new Set(surebets.map((surebet) => saoPauloDateKey(surebet.createdAt).slice(0, 7))),
+  ).sort((left, right) => right.localeCompare(left));
+  const monthLabel = (value: string) => {
+    const [year, monthNumber] = value.split("-").map(Number);
+    const label = new Intl.DateTimeFormat("pt-BR", {
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(Date.UTC(year!, monthNumber! - 1, 1)));
+    return label.charAt(0).toLocaleUpperCase("pt-BR") + label.slice(1);
+  };
+  const matchesListFilters = (surebet: Surebet) => {
+    if (
+      selectedMonth !== "ALL" &&
+      saoPauloDateKey(surebet.createdAt).slice(0, 7) !== selectedMonth
+    )
+      return false;
+    if (
+      selectedBookmaker !== "ALL" &&
+      !surebet.legs.some((leg) => leg.bookmakerId === selectedBookmaker)
+    )
+      return false;
+    if (creditFilter === "NONE") {
+      if (surebet.generatesBetCredit || surebet.legs.some((leg) => leg.usesBetCredit))
+        return false;
+    } else if (creditFilter === "GENERATES") {
+      if (!surebet.generatesBetCredit) return false;
+    } else if (creditFilter === "USES_LINKED") {
+      if (
+        !surebet.legs.some(
+          (leg) => leg.usesBetCredit && !leg.usesFreeBetCredit,
+        )
+      )
+        return false;
+    } else if (creditFilter === "USES_FREE") {
+      if (!surebet.legs.some((leg) => leg.usesFreeBetCredit)) return false;
+    }
+    if (resultFilter === "POSITIVE" && surebet.profit <= 0) return false;
+    if (resultFilter === "NEGATIVE" && surebet.profit >= 0) return false;
+    if (resultFilter === "ZERO" && Math.abs(surebet.profit) >= 0.005) return false;
+    if (!normalizedSearch) return true;
+    const searchable = [
+      surebet.event,
+      surebet.title,
+      ...surebet.legs.flatMap((leg) => {
+        const bookmaker = bookmakers.find((item) => item.id === leg.bookmakerId);
+        return [
+          leg.selectionName,
+          bookmaker?.name ?? "",
+          bookmaker?.ownerName ?? "",
+        ];
+      }),
+    ]
+      .join(" ")
+      .toLocaleLowerCase("pt-BR")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    return searchable.includes(normalizedSearch);
+  };
+  const listFilteredSurebets = surebets.filter(matchesListFilters);
+  const filteredSurebets = listFilteredSurebets.filter((surebet) =>
     matchesTab(surebet, activeTab),
   );
+  const activeFilterCount = [
+    selectedBookmaker !== "ALL",
+    creditFilter !== "ALL",
+    resultFilter !== "ALL",
+  ].filter(Boolean).length;
+  const clearListFilters = () => {
+    setSearch("");
+    setSelectedMonth("ALL");
+    setSelectedBookmaker("ALL");
+    setCreditFilter("ALL");
+    setResultFilter("ALL");
+    setActiveTab("ALL");
+  };
   const todayKey = saoPauloDateKey(new Date());
   const todaySurebets = surebets.filter(
     (surebet) => saoPauloDateKey(surebet.createdAt) === todayKey,
   );
-  const dailyProfitWithoutCredit = todaySurebets
+  const metricSurebets = showOpenMetrics
+    ? surebets.filter((surebet) => surebet.status === "OPEN")
+    : todaySurebets;
+  const profitWithoutCredit = metricSurebets
     .filter(
       (surebet) =>
         !surebet.generatesBetCredit &&
@@ -2134,7 +2225,7 @@ function Surebets({
     )
     .reduce((total, surebet) => total + surebet.profit, 0);
   const pendingCreditStatuses = new Set(["EXPECTED", "AVAILABLE"]);
-  const pendingCredits = todaySurebets.reduce(
+  const pendingCredits = metricSurebets.reduce(
     (total, surebet) =>
       total +
       (surebet.generatesBetCredit &&
@@ -2144,7 +2235,7 @@ function Surebets({
         : 0),
     0,
   );
-  const creditConsumers = todaySurebets.filter((surebet) =>
+  const creditConsumers = metricSurebets.filter((surebet) =>
     surebet.legs.some((leg) => leg.usesBetCredit),
   );
   const convertedCreditWithoutLoss = creditConsumers.reduce(
@@ -2192,11 +2283,27 @@ function Surebets({
         }
       />
       <section className="content">
+        <div className="surebet-summary-scope">
+          <span>
+            {showOpenMetrics
+              ? "Exibindo métricas das bets em aberto"
+              : "Exibindo métricas das bets criadas hoje"}
+          </span>
+          <Toggle
+            checked={showOpenMetrics}
+            onChange={setShowOpenMetrics}
+            label="Bets em aberto"
+          />
+        </div>
         <div className="summary-strip surebet-daily-summary">
           <div>
-            <span>Ganhos do dia</span>
-            <strong>{money.format(dailyProfitWithoutCredit)}</strong>
-            <small>Lucro sem uso ou geração de crédito</small>
+            <span>{showOpenMetrics ? "Ganhos em aberto" : "Ganhos do dia"}</span>
+            <strong>{money.format(profitWithoutCredit)}</strong>
+            <small>
+              {showOpenMetrics
+                ? "Lucro projetado sem uso ou geração de crédito"
+                : "Lucro sem uso ou geração de crédito"}
+            </small>
           </div>
           <div>
             <span>Créditos a converter</span>
@@ -2206,7 +2313,11 @@ function Surebets({
           <div>
             <span>Crédito convertido sem o red</span>
             <strong>{money.format(convertedCreditWithoutLoss)}</strong>
-            <small>Resultado das conversões de hoje</small>
+            <small>
+              {showOpenMetrics
+                ? "Resultado projetado das conversões em aberto"
+                : "Resultado das conversões de hoje"}
+            </small>
           </div>
           <div>
             <span>Crédito convertido com o red</span>
@@ -2232,8 +2343,9 @@ function Surebets({
               {tab.label}{" "}
               <span>
                 {
-                  surebets.filter((surebet) => matchesTab(surebet, tab.key))
-                    .length
+                  listFilteredSurebets.filter((surebet) =>
+                    matchesTab(surebet, tab.key),
+                  ).length
                 }
               </span>
             </button>
@@ -2242,11 +2354,101 @@ function Surebets({
         <article className="panel list-panel">
           <div className="filters">
             <div className="search grow">
-              ⌕ <input placeholder="Buscar por evento ou casa..." />
+              ⌕{" "}
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar por evento, linha, casa ou titular..."
+                aria-label="Buscar entradas"
+              />
             </div>
-            <button className="secondary">Agosto 2026⌄</button>
-            <button className="secondary">Filtros</button>
+            <select
+              className="secondary list-month-select"
+              value={selectedMonth}
+              onChange={(event) => setSelectedMonth(event.target.value)}
+              aria-label="Filtrar entradas por mês"
+            >
+              <option value="ALL">Todos os meses</option>
+              {availableMonths.map((availableMonth) => (
+                <option key={availableMonth} value={availableMonth}>
+                  {monthLabel(availableMonth)}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className={`secondary filter-toggle${filtersOpen ? " active" : ""}`}
+              aria-expanded={filtersOpen}
+              onClick={() => setFiltersOpen((current) => !current)}
+            >
+              Filtros{activeFilterCount ? ` (${activeFilterCount})` : ""}
+            </button>
           </div>
+          {filtersOpen && (
+            <div className="surebet-filter-panel">
+              <Field label="Status">
+                <select
+                  value={activeTab}
+                  onChange={(event) =>
+                    setActiveTab(event.target.value as SurebetTab)
+                  }
+                >
+                  {tabs.map((tab) => (
+                    <option key={tab.key} value={tab.key}>
+                      {tab.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Casa de aposta">
+                <select
+                  value={selectedBookmaker}
+                  onChange={(event) => setSelectedBookmaker(event.target.value)}
+                >
+                  <option value="ALL">Todas as casas</option>
+                  {bookmakers.map((bookmaker) => (
+                    <option key={bookmaker.id} value={bookmaker.id}>
+                      {bookmakerLabel(bookmaker)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Crédito de aposta">
+                <select
+                  value={creditFilter}
+                  onChange={(event) =>
+                    setCreditFilter(event.target.value as CreditFilter)
+                  }
+                >
+                  <option value="ALL">Todos os tipos</option>
+                  <option value="NONE">Sem crédito</option>
+                  <option value="GENERATES">Gerou crédito</option>
+                  <option value="USES_LINKED">Usou crédito de bet</option>
+                  <option value="USES_FREE">Usou crédito livre</option>
+                </select>
+              </Field>
+              <Field label="Resultado">
+                <select
+                  value={resultFilter}
+                  onChange={(event) =>
+                    setResultFilter(event.target.value as ResultFilter)
+                  }
+                >
+                  <option value="ALL">Todos os resultados</option>
+                  <option value="POSITIVE">Lucro</option>
+                  <option value="NEGATIVE">Prejuízo</option>
+                  <option value="ZERO">Resultado zero</option>
+                </select>
+              </Field>
+              <button
+                type="button"
+                className="secondary clear-list-filters"
+                onClick={clearListFilters}
+              >
+                Limpar filtros
+              </button>
+            </div>
+          )}
           <SurebetTable
             surebets={filteredSurebets}
             bookmakers={bookmakers}
@@ -2271,7 +2473,7 @@ function Surebets({
           />
           {filteredSurebets.length === 0 && (
             <div className="empty-tab-state">
-              Nenhuma entrada encontrada neste status.
+              Nenhuma entrada corresponde aos filtros selecionados.
             </div>
           )}
         </article>

@@ -701,6 +701,17 @@ td:first-child small {
 .surebet-daily-summary {
   margin-bottom: 24px;
 }
+.surebet-summary-scope {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  margin: 0 2px 10px;
+}
+.surebet-summary-scope > span {
+  color: var(--muted);
+  font-size: 9px;
+}
 .surebet-daily-summary small {
   color: var(--muted);
   font-size: 9px;
@@ -1129,6 +1140,36 @@ td:first-child small {
   display: flex;
   gap: 9px;
   margin-bottom: 6px;
+}
+.list-month-select {
+  min-width: 160px;
+  appearance: auto;
+  color-scheme: dark;
+}
+.filter-toggle.active {
+  border-color: var(--green);
+  color: var(--green);
+}
+.surebet-filter-panel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr)) auto;
+  align-items: end;
+  gap: 12px;
+  margin: 12px 0 8px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #0a1b12;
+}
+.surebet-filter-panel .field {
+  min-width: 0;
+}
+.surebet-filter-panel select {
+  width: 100%;
+}
+.clear-list-filters {
+  min-height: 43px;
+  white-space: nowrap;
 }
 .field input.input-pending {
   border-color: #765d2a;
@@ -1573,6 +1614,14 @@ td:first-child small {
   }
   .summary-strip {
     grid-template-columns: 1fr 1fr;
+  }
+  .surebet-summary-scope {
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .surebet-summary-scope > span {
+    max-width: 160px;
+    line-height: 1.4;
   }
   .summary-strip > div:nth-child(2) {
     border: 0;
@@ -2271,6 +2320,12 @@ dialog.edit-drawer-backdrop {
     width: 100%;
     min-width: 0;
     padding-inline: 8px;
+  }
+  .surebet-filter-panel {
+    grid-template-columns: 1fr;
+  }
+  .clear-list-filters {
+    width: 100%;
   }
   .surebet-table-wrap {
     margin: 12px 0 0;
