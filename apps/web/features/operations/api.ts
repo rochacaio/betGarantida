@@ -16,7 +16,7 @@ export type ApiLeg = {
   increasePercent: string;
   usesBetCredit: boolean;
   usesFreeBetCredit: boolean;
-  result: "PENDING" | "WON" | "LOST";
+  result: "PENDING" | "WON" | "LOST" | "VOIDED";
   scenarioResult: string;
 };
 export type ApiOperation = {
@@ -95,7 +95,7 @@ export const operationsApi = {
     }),
   settle: (
     operation: { id: string; version: number },
-    legs: Array<{ legId: string; result: "WON" | "LOST" }>,
+    legs: Array<{ legId: string; result: "WON" | "LOST" | "VOIDED" }>,
     creditGenerated?: boolean,
     grantedCreditAmount?: string,
   ) =>

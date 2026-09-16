@@ -226,6 +226,9 @@ Status: implementada e validada por lint, typecheck e build de produção.
   referência única mantida pela perna cancelada, permitindo reutilização segura.
 - Ao reutilizar crédito disponível, referências residuais de operações já
   canceladas por versões anteriores são liberadas e auditadas automaticamente.
+- A finalização aceita `Devolvido` por linha. O backend estorna stake Back ou
+  responsabilidade Lay em dinheiro, registra `BET_REFUND` no extrato e inclui o
+  valor no resultado realizado sem transformá-lo em lucro.
 - Dados demonstrativos, `initialBookmakers`, `initialSurebets`, flags financeiras locais e `betgarantida-demo` foram removidos.
 - Estados iniciais de carregamento, listas vazias e erros de autenticação/mutação estão cobertos; `STALE_VERSION` preserva o drawer/rascunho porque a mutação rejeitada não desmonta o editor.
 - Rewrite por `API_ORIGIN` mantém cookies em mesma origem e está alinhado ao deploy na Vercel.

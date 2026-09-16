@@ -536,4 +536,27 @@ describe("OperationsService", () => {
       ),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
+
+  it("aceita liquidação com linha devolvida sem green", async () => {
+    repository.settle.mockResolvedValue({
+      ...record(),
+      status: OperationStatus.SETTLED,
+      version: 2,
+    });
+    await service.settle(
+      userId,
+      operationId,
+      {
+        version: 1,
+        legs: record().legs.map((leg, index) => ({
+          legId: leg.id,
+          result: index === 0 ? BetLegResult.VOIDED : BetLegResult.LOST,
+        })),
+      },
+      idempotencyKey,
+    );
+    expect(repository.settle.mock.calls[0]?.[0].legs[0]?.result).toBe(
+      BetLegResult.VOIDED,
+    );
+  });
 });

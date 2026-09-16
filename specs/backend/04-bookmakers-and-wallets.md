@@ -57,6 +57,8 @@ O `cachedBalance` pode acelerar leituras, mas é atualizado na mesma transação
   cancelada e devolve o crédito para `AVAILABLE`, permitindo utilizá-lo em uma
   nova operação sem violar a unicidade de consumo.
 - Liquidar: `BET_RETURN` positivo para cada payout vencedor.
+- Linha devolvida: `BET_REFUND` positivo no valor real debitado; crédito
+  promocional devolvido não cria saldo em dinheiro.
 - Consumir crédito: opcionalmente registrar `BONUS_USED` informativo, sem reduzir saldo em dinheiro.
 
 Todos os efeitos possuem chave idempotente determinística por operação, revisão, perna e tipo.

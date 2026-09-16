@@ -1808,6 +1808,7 @@ td:first-child small {
 }
 .outcome-control > div {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 .outcome-control button {
@@ -1829,6 +1830,11 @@ td:first-child small {
   border-color: #ff5d67;
   background: #381a20;
   color: #ff7b83;
+}
+.outcome-control .voided.active {
+  border-color: #e4bc43;
+  background: #3a3216;
+  color: #ffe17c;
 }
 .outcome-control .settle-button {
   margin-left: 8px;

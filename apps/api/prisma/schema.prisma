@@ -55,6 +55,7 @@ enum BetLegResult {
   PENDING
   WON
   LOST
+  VOIDED
 }
 
 enum BetType {

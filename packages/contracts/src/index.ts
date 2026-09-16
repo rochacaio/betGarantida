@@ -25,7 +25,7 @@ export type OperationStatus =
   | "WAITING_CREDIT_USE"
   | "SETTLED"
   | "CANCELLED";
-export type BetLegResult = "PENDING" | "WON" | "LOST";
+export type BetLegResult = "PENDING" | "WON" | "LOST" | "VOIDED";
 export type BetType = "BACK" | "LAY";
 export type BetCreditStatus =
   | "EXPECTED"

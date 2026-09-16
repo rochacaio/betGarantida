@@ -66,6 +66,11 @@ OPEN -> CANCELLED
 mercado da linha, como `Vitória Cruzeiro`, `Empate` ou `Vitória Criciúma`.
 Linhas antigas permanecem válidas com valor nulo.
 
+O resultado da linha aceita `PENDING`, `WON`, `LOST` e `VOIDED`. Em `VOIDED`, o
+risco efetivamente debitado da casa é devolvido integralmente (`stake` em Back e
+responsabilidade em Lay). Stake promocional não gera entrada artificial de
+dinheiro, pois não foi debitada do saldo real.
+
 `betType` pode ser `BACK` ou `LAY`. Em `BACK`, `riskAmount = stake`. Em `LAY`,
 `stake` representa o ganho bruto oferecido na bolsa e `riskAmount` representa a
 responsabilidade realmente reservada: `stake × (odd - 1)`.

@@ -434,7 +434,7 @@ export class PrismaOperationsRepository implements OperationsRepository {
     version: number;
     creditGenerated?: boolean;
     grantedCreditAmount?: Prisma.Decimal;
-    legs: Array<{ legId: string; result: "WON" | "LOST" }>;
+    legs: Array<{ legId: string; result: "WON" | "LOST" | "VOIDED" }>;
     idempotencyKey: string;
     requestHash: string;
   }) {
@@ -468,7 +468,9 @@ export class PrismaOperationsRepository implements OperationsRepository {
               (leg) =>
                 leg.result === BetLegResult.WON && byId.get(leg.id) !== "WON",
             ) ||
-            !input.legs.some((leg) => leg.result === "WON") ||
+            !input.legs.some(
+              (leg) => leg.result === "WON" || leg.result === "VOIDED",
+            ) ||
             (operation.generatesBetCredit &&
               operation.generatedCredit?.status === BetCreditStatus.EXPECTED &&
               input.creditGenerated === undefined)
@@ -498,10 +500,14 @@ export class PrismaOperationsRepository implements OperationsRepository {
             const payout =
               result === "WON"
                 ? leg.projectedPayout
-                : leg.stake
-                    .mul(leg.cashbackPercent)
-                    .div(100)
-                    .toDecimalPlaces(2);
+                : result === "VOIDED"
+                  ? leg.usesBetCredit
+                    ? new Prisma.Decimal(0)
+                    : leg.riskAmount
+                  : leg.stake
+                      .mul(leg.cashbackPercent)
+                      .div(100)
+                      .toDecimalPlaces(2);
             if (payout.gt(0) && leg.result !== BetLegResult.WON)
               await this.walletEffect(
                 tx,
@@ -510,13 +516,20 @@ export class PrismaOperationsRepository implements OperationsRepository {
                 operation.id,
                 leg.id,
                 payout,
-                WalletTransactionType.BET_RETURN,
+                result === "VOIDED"
+                  ? WalletTransactionType.BET_REFUND
+                  : WalletTransactionType.BET_RETURN,
                 `settle:${operation.id}:${leg.id}`,
               );
             await tx.betLeg.update({
               where: { id: leg.id },
               data: {
-                result: result === "WON" ? BetLegResult.WON : BetLegResult.LOST,
+                result:
+                  result === "WON"
+                    ? BetLegResult.WON
+                    : result === "VOIDED"
+                      ? BetLegResult.VOIDED
+                      : BetLegResult.LOST,
               },
             });
           }

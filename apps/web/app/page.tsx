@@ -51,8 +51,8 @@ type Leg = {
   commission: number;
   cashback: number;
   increase: number;
-  result: "PENDING" | "WON" | "LOST";
-  persistedResult?: "PENDING" | "WON" | "LOST";
+  result: "PENDING" | "WON" | "LOST" | "VOIDED";
+  persistedResult?: "PENDING" | "WON" | "LOST" | "VOIDED";
   usesBetCredit?: boolean;
   usesFreeBetCredit?: boolean;
   creditSourceSurebetId?: string;
@@ -2622,6 +2622,14 @@ function LegRow({
               >
                 × Red
               </button>
+              <button
+                type="button"
+                className={leg.result === "VOIDED" ? "voided active" : "voided"}
+                disabled={earlyWinRecorded}
+                onClick={() => update({ result: "VOIDED" })}
+              >
+                ↩ Devolvido
+              </button>
             </div>
             {earlyWinRecorded && <small>Green antecipado já creditado</small>}
           </div>
@@ -3058,7 +3066,13 @@ function Editor({
   const completeFinalization = (creditWasGenerated: boolean) => {
     if (!editing) return;
     const realizedReturn = legs.reduce(
-      (sum, leg, index) => sum + (leg.result === "WON" ? returns[index] : 0),
+      (sum, leg, index) =>
+        sum +
+        (leg.result === "WON"
+          ? returns[index]
+          : leg.result === "VOIDED" && !leg.usesBetCredit
+            ? riskAmount(leg)
+            : 0),
       0,
     );
     const realizedProfit = realizedReturn - total;
@@ -3117,10 +3131,16 @@ function Editor({
     if (!editing) return;
     if (legs.some((leg) => leg.result === "PENDING"))
       return showValidationToast(
-        "Marque todas as entradas como Green ou Red antes de finalizar.",
+        "Marque todas as entradas como Green, Red ou Devolvido antes de finalizar.",
       );
-    if (!legs.some((leg) => leg.result === "WON"))
-      return showValidationToast("Selecione pelo menos uma entrada vencedora.");
+    if (
+      !legs.some(
+        (leg) => leg.result === "WON" || leg.result === "VOIDED",
+      )
+    )
+      return showValidationToast(
+        "Selecione pelo menos uma entrada Green ou Devolvida.",
+      );
     if (generatesBetCredit && !editing.creditGenerated)
       return askIfCreditWasGenerated();
     completeFinalization(!!editing.creditGenerated);
@@ -3410,7 +3430,7 @@ export default function Home() {
         previous,
         surebet.legs.map((leg) => ({
           legId: leg.id,
-          result: leg.result as "WON" | "LOST",
+          result: leg.result as "WON" | "LOST" | "VOIDED",
         })),
         surebet.generatesBetCredit ? surebet.creditGenerated : undefined,
         surebet.creditGenerated

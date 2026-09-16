@@ -92,7 +92,7 @@ export interface OperationsRepository {
     version: number;
     creditGenerated?: boolean;
     grantedCreditAmount?: Prisma.Decimal;
-    legs: Array<{ legId: string; result: "WON" | "LOST" }>;
+    legs: Array<{ legId: string; result: "WON" | "LOST" | "VOIDED" }>;
     idempotencyKey: string;
     requestHash: string;
   }): Promise<OperationRecord>;

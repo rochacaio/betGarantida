@@ -35,7 +35,7 @@ export interface PreparedBetLeg {
   projectedPayout: Decimal;
 }
 
-export type SettlementResult = "WON" | "LOST";
+export type SettlementResult = "WON" | "LOST" | "VOIDED";
 
 export interface OperationSnapshot {
   legs: Array<PreparedBetLeg & { scenarioResult: Decimal }>;
@@ -56,4 +56,5 @@ export interface SettlementSnapshot {
   realizedRoiPercent: Decimal;
   winningPayout: Decimal;
   cashbackReturn: Decimal;
+  voidedReturn: Decimal;
 }

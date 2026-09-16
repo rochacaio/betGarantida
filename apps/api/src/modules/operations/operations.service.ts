@@ -220,12 +220,14 @@ export class OperationsService {
   ) {
     this.assertIdempotencyKey(idempotencyKey);
     if (
-      !dto.legs.some((leg) => leg.result === "WON") ||
+      !dto.legs.some(
+        (leg) => leg.result === "WON" || leg.result === "VOIDED",
+      ) ||
       dto.legs.some((leg) => leg.result === "PENDING")
     )
       throw new UnprocessableEntityException({
         code: "INVALID_SETTLEMENT",
-        message: "Informe todas as linhas e ao menos um green.",
+        message: "Informe todas as linhas e ao menos um green ou devolvido.",
         fields: [{ path: "legs", code: "INVALID_RESULTS" }],
       });
     if (
@@ -264,7 +266,7 @@ export class OperationsService {
               : undefined,
             legs: dto.legs.map((leg) => ({
               legId: leg.legId,
-              result: leg.result as "WON" | "LOST",
+              result: leg.result as "WON" | "LOST" | "VOIDED",
             })),
             idempotencyKey,
             requestHash: this.hash(payload),

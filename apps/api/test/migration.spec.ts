@@ -90,4 +90,19 @@ describe("Initial domain migration", () => {
       'CONSTRAINT "reserved_balance_transactions_amount_check"',
     );
   });
+
+  it("adds the voided result without rewriting existing bet legs", () => {
+    const voidedMigration = readFileSync(
+      join(
+        migrationsRoot,
+        "20260916000000_add_voided_bet_leg_result",
+        "migration.sql",
+      ),
+      "utf8",
+    );
+    expect(voidedMigration).toContain(
+      "ALTER TYPE \"BetLegResult\" ADD VALUE 'VOIDED'",
+    );
+    expect(voidedMigration).not.toContain("UPDATE");
+  });
 });

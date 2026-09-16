@@ -211,9 +211,9 @@ export function calculateSettlement(
       "results",
     );
   }
-  if (!results.includes("WON")) {
+  if (!results.includes("WON") && !results.includes("VOIDED")) {
     throw new CalculationValidationError(
-      "Ao menos uma linha precisa ser vencedora.",
+      "Ao menos uma linha precisa ser vencedora ou devolvida.",
       "results",
     );
   }
@@ -236,7 +236,20 @@ export function calculateSettlement(
       new Decimal(0),
     ),
   );
-  const realizedReturn = roundMoney(winningPayout.plus(cashbackReturn));
+  const voidedReturn = roundMoney(
+    snapshot.legs.reduce(
+      (total, leg, index) =>
+        total.plus(
+          results[index] === "VOIDED" && !leg.usesBetCredit
+            ? leg.riskAmount
+            : 0,
+        ),
+      new Decimal(0),
+    ),
+  );
+  const realizedReturn = roundMoney(
+    winningPayout.plus(cashbackReturn).plus(voidedReturn),
+  );
   const realizedProfit = roundMoney(
     realizedReturn.minus(snapshot.realCashInvestment),
   );
@@ -249,6 +262,7 @@ export function calculateSettlement(
     realizedRoiPercent,
     winningPayout,
     cashbackReturn,
+    voidedReturn,
   };
 }
 

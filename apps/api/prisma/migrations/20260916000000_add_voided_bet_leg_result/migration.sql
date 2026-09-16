@@ -1,0 +1,1 @@
+ALTER TYPE "BetLegResult" ADD VALUE 'VOIDED';

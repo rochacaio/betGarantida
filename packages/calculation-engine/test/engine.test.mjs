@@ -141,6 +141,31 @@ test("liquidação soma múltiplas linhas vencedoras", () => {
   assert.equal(fixed(settlement.realizedProfit), "200.00");
 });
 
+test("linha devolvida retorna somente o risco em dinheiro", () => {
+  const settlement = calculateSettlement(
+    [
+      { stake: "100", odd: "2" },
+      { stake: "25", odd: "3", usesBetCredit: true },
+    ],
+    ["VOIDED", "VOIDED"],
+  );
+  assert.equal(fixed(settlement.voidedReturn), "100.00");
+  assert.equal(fixed(settlement.realizedReturn), "100.00");
+  assert.equal(fixed(settlement.realizedProfit), "0.00");
+});
+
+test("Lay devolvido retorna a responsabilidade debitada", () => {
+  const settlement = calculateSettlement(
+    [
+      { stake: "10", odd: "4", betType: "LAY" },
+      { stake: "30", odd: "2" },
+    ],
+    ["VOIDED", "LOST"],
+  );
+  assert.equal(fixed(settlement.voidedReturn), "30.00");
+  assert.equal(fixed(settlement.realizedProfit), "-30.00");
+});
+
 test("README: conversão de freebet equilibra pelo profitFactor", () => {
   const conversion = convertFreebet({
     freebet: "100",
@@ -225,7 +250,7 @@ test("balanceia uma linha Lay usando a responsabilidade como risco real", () => 
   assert.equal(fixed(snapshot.realCashInvestment), "274.24");
 });
 
-test("liquidação exige exatamente um resultado por linha e ao menos um green", () => {
+test("liquidação exige um resultado por linha e ao menos um green ou devolvido", () => {
   const inputs = [
     { stake: "10", odd: "2" },
     { stake: "10", odd: "2" },
