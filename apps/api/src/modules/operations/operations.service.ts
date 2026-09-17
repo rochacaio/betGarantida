@@ -220,9 +220,10 @@ export class OperationsService {
   ) {
     this.assertIdempotencyKey(idempotencyKey);
     if (
-      !dto.legs.some(
-        (leg) => leg.result === "WON" || leg.result === "VOIDED",
-      ) ||
+      (dto.legs.length > 1 &&
+        !dto.legs.some(
+          (leg) => leg.result === "WON" || leg.result === "VOIDED",
+        )) ||
       dto.legs.some((leg) => leg.result === "PENDING")
     )
       throw new UnprocessableEntityException({

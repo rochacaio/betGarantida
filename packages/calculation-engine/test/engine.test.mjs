@@ -42,6 +42,17 @@ test("README: exemplo completo equilibra R$ 100 a 2.43 com R$ 121.50 a 2.00", ()
   assert.equal(fixed(settlement.realizedProfit), "264.50");
 });
 
+test("aposta isolada calcula retorno e pode ser liquidada somente como red", () => {
+  const balanced = balanceStakes([{ stake: "50", odd: "2.50" }]);
+  const snapshot = calculateOperationSnapshot(balanced);
+  assert.equal(fixed(snapshot.protectedReturn), "125.00");
+  assert.equal(fixed(snapshot.projectedProfit), "75.00");
+  assert.equal(snapshot.isSurebet, false);
+  const settlement = calculateSettlement(balanced, ["LOST"]);
+  assert.equal(fixed(settlement.realizedReturn), "0.00");
+  assert.equal(fixed(settlement.realizedProfit), "-50.00");
+});
+
 test("README: comissão permanece sobre o lucro e não reduz a stake", () => {
   const balanced = balanceStakes([
     { stake: "100", odd: "2", increasePercent: "30", commissionPercent: "5" },

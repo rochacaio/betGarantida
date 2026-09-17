@@ -38,7 +38,7 @@ export class OperationWriteDto {
   expectedBetCredit?: string;
 
   @IsArray()
-  @ArrayMinSize(2)
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => OperationLegDto)
   legs!: OperationLegDto[];
@@ -48,7 +48,7 @@ export class CreateOperationDto extends OperationWriteDto {}
 
 export class PreviewOperationDto {
   @IsArray()
-  @ArrayMinSize(2)
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => PreviewOperationLegDto)
   legs!: PreviewOperationLegDto[];

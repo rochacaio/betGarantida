@@ -35,7 +35,7 @@ Status: implementada e validada estaticamente.
 Pendências deliberadas:
 
 - A migration ainda não foi aplicada a uma instância PostgreSQL porque nenhuma `DATABASE_URL` real/local foi configurada. Aplicar e testar a migration na primeira configuração do Neon ou banco local, antes de dados reais.
-- Regras entre múltiplas linhas/tabelas — mínimo de duas pernas, propriedade pelo mesmo usuário, saldo, transições e disponibilidade do crédito — serão garantidas pelos casos de uso transacionais nas specs 4, 6 e 7.
+- Regras entre linhas/tabelas — mínimo de uma perna, propriedade pelo mesmo usuário, saldo, transições e disponibilidade do crédito — são garantidas pelos casos de uso transacionais nas specs 4, 6 e 7.
 - Repositórios específicos de cada agregado serão criados com seus casos de uso; controllers não devem acessar `PrismaService` diretamente.
 
 ## Spec 03 — Autenticação
@@ -106,7 +106,7 @@ Pendências deliberadas:
 Status: implementada e validada sem banco externo.
 
 - Endpoints autenticados de preview, criação, listagem, detalhe, edição e cancelamento implementados em `/api/v1/operations`.
-- Preview progressivo aceita linhas automáticas sem stake e não exige evento/casa; criação e edição exigem evento e ao menos duas pernas completas.
+- Preview progressivo aceita linhas automáticas sem stake e não exige evento/casa; criação e edição exigem evento e ao menos uma perna completa, permitindo apostas isoladas.
 - O servidor ignora cálculos do cliente, usa o motor da Spec 05 e persiste o snapshot canônico completo, `engineVersion` e campos resumidos.
 - Criação bloqueia contas, valida propriedade/status, agrega stakes por casa, verifica saldos e grava operação, pernas, débitos e crédito `EXPECTED` em transação `SERIALIZABLE` com retry.
 - Crédito usado precisa estar `AVAILABLE`, pertencer ao usuário, ter valor integral compatível e não possuir consumidor; ele fica reservado pela operação sem ser consumido antes da liquidação.

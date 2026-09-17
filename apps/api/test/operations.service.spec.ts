@@ -537,6 +537,27 @@ describe("OperationsService", () => {
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
+  it("aceita uma aposta isolada liquidada como red", async () => {
+    repository.settle.mockResolvedValue({
+      ...record(),
+      status: OperationStatus.SETTLED,
+      version: 2,
+    });
+    const leg = record().legs[0];
+    await service.settle(
+      userId,
+      operationId,
+      {
+        version: 1,
+        legs: [{ legId: leg.id, result: BetLegResult.LOST }],
+      },
+      idempotencyKey,
+    );
+    expect(repository.settle.mock.calls[0]?.[0].legs).toEqual([
+      { legId: leg.id, result: BetLegResult.LOST },
+    ]);
+  });
+
   it("aceita liquidação com linha devolvida sem green", async () => {
     repository.settle.mockResolvedValue({
       ...record(),

@@ -3184,9 +3184,9 @@ function Editor({
       return showValidationToast(
         "Preencha o evento ou identificação da surebet.",
       );
-    if (scenarioIds.length < 2)
+    if (scenarioIds.length < 1)
       return showValidationToast(
-        "A surebet precisa ter pelo menos dois resultados diferentes.",
+        "A operação precisa ter pelo menos uma entrada.",
       );
     const invalidLegIndex = legs.findIndex(
       (leg) =>
@@ -3336,6 +3336,7 @@ function Editor({
         "Marque todas as entradas como Green, Red ou Devolvido antes de finalizar.",
       );
     if (
+      legs.length > 1 &&
       !legs.some(
         (leg) => leg.result === "WON" || leg.result === "VOIDED",
       )
@@ -3366,7 +3367,7 @@ function Editor({
   });
   const header = (
     <Topbar
-      title={editing ? "Editar surebet" : "Nova surebet"}
+      title={editing ? "Editar operação" : "Nova operação"}
       subtitle="Distribua as entradas e confira o retorno antes de salvar"
       action={
         <div className="header-actions">
@@ -3442,7 +3443,7 @@ function Editor({
         <div className="credit-generator">
           <div>
             <Toggle
-              label="Esta surebet vai gerar crédito de aposta"
+              label="Esta operação vai gerar crédito de aposta"
               checked={generatesBetCredit}
               onChange={setGeneratesBetCredit}
             />
@@ -3475,13 +3476,25 @@ function Editor({
         <article className="surebet-builder">
           <div className="builder-top">
             <div>
-              <span className="card-label">DISTRIBUIÇÃO DA SUREBET</span>
-              <h2>Entradas da operação</h2>
+              <span className="card-label">
+                {scenarioIds.length === 1
+                  ? "APOSTA ISOLADA"
+                  : "DISTRIBUIÇÃO DA SUREBET"}
+              </span>
+              <h2>
+                {scenarioIds.length === 1
+                  ? "Entrada da operação"
+                  : "Entradas da operação"}
+              </h2>
             </div>
             <div className="guarantee">
               <span>✓</span>
               <div>
-                <small>Resultado protegido</small>
+                <small>
+                  {scenarioIds.length === 1
+                    ? "Resultado se ganhar"
+                    : "Resultado protegido"}
+                </small>
                 <strong className={profit < 0 ? "negative-text" : ""}>
                   {isCalculationReady
                     ? `${profit >= 0 ? "+ " : "− "}${money.format(Math.abs(profit))}`
@@ -3500,7 +3513,7 @@ function Editor({
                   65 + scenarioIds.indexOf(leg.scenarioId),
                 )}
                 isChild={leg.groupPosition > 0}
-                canRemove={leg.groupPosition > 0 || scenarioIds.length > 2}
+                canRemove={leg.groupPosition > 0 || scenarioIds.length > 1}
                 bookmakers={bookmakers}
                 creditSources={creditSources}
                 scenarioResult={

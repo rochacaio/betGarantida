@@ -86,7 +86,7 @@ Estados: `EXPECTED`, `AVAILABLE`, `NOT_GRANTED`, `CONSUMED`, `EXPIRED`, `CANCELL
 ## Invariantes
 
 - Todo recurso consultado ou alterado pertence ao usuário da sessão.
-- Operação possui no mínimo duas pernas.
+- Operação possui no mínimo uma perna. Uma única perna representa uma aposta isolada; duas ou mais podem representar uma surebet.
 - Conta da casa deve estar ativa e pertencer ao usuário.
 - Stake e crédito são maiores que zero; odd é maior que 1.
 - Comissão fica entre 0 e 100; cashback e aumento não podem ser negativos.

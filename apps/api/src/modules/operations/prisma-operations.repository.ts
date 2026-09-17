@@ -468,9 +468,10 @@ export class PrismaOperationsRepository implements OperationsRepository {
               (leg) =>
                 leg.result === BetLegResult.WON && byId.get(leg.id) !== "WON",
             ) ||
-            !input.legs.some(
-              (leg) => leg.result === "WON" || leg.result === "VOIDED",
-            ) ||
+            (operation.legs.length > 1 &&
+              !input.legs.some(
+                (leg) => leg.result === "WON" || leg.result === "VOIDED",
+              )) ||
             (operation.generatesBetCredit &&
               operation.generatedCredit?.status === BetCreditStatus.EXPECTED &&
               input.creditGenerated === undefined)

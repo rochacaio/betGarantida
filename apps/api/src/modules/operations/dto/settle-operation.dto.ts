@@ -37,7 +37,7 @@ export class SettleOperationDto {
   grantedCreditAmount?: string;
 
   @IsArray()
-  @ArrayMinSize(2)
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => SettleLegDto)
   legs!: SettleLegDto[];

@@ -2,7 +2,7 @@
 
 ## Criar
 
-`POST /operations` exige evento e pelo menos duas pernas completas. O servidor:
+`POST /operations` exige evento e pelo menos uma perna completa. Uma única perna cria uma aposta isolada; o servidor:
 
 1. autentica e valida propriedade das contas;
 2. valida eventual crédito usado;
@@ -14,7 +14,7 @@
 8. cria crédito `EXPECTED` quando aplicável;
 9. confirma tudo em uma transação.
 
-A operação nasce `OPEN`. O frontend começa com duas linhas vazias, mas isso é comportamento de UI, não dado do backend.
+A operação nasce `OPEN`. O frontend começa com duas linhas vazias, mas permite remover uma delas para registrar uma aposta isolada.
 
 Uma operação exige pelo menos dois `scenarioId` distintos. Cada cenário pode ter
 uma perna principal (`groupPosition=0`) e pernas filhas ordenadas. A API aceita

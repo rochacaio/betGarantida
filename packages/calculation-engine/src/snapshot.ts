@@ -13,11 +13,21 @@ export const CALCULATION_ENGINE_VERSION = "1.2.0" as const;
 export const ROUNDING_POLICY = "HALF_UP_2_DECIMALS_RECALCULATE" as const;
 
 export function balanceStakes(inputs: BalanceLegInput[]): BetLegInput[] {
-  if (inputs.length < 2) {
+  if (inputs.length < 1) {
     throw new CalculationValidationError(
-      "A operação precisa de pelo menos duas linhas.",
+      "A operação precisa de pelo menos uma linha.",
       "legs",
     );
+  }
+  if (inputs.length === 1) {
+    if (inputs[0]!.stake === undefined) {
+      throw new CalculationValidationError(
+        "A stake da aposta isolada é obrigatória.",
+        "legs.0.stake",
+      );
+    }
+    prepareBetLeg(inputs[0] as BetLegInput, "legs.0");
+    return [{ ...inputs[0], stake: roundMoney(inputs[0]!.stake) }] as BetLegInput[];
   }
   const scenarioKey = (input: BalanceLegInput, index: number) =>
     input.scenarioId ?? `legacy-${index}`;
@@ -105,9 +115,9 @@ export function balanceStakes(inputs: BalanceLegInput[]): BetLegInput[] {
 export function calculateOperationSnapshot(
   inputs: BetLegInput[],
 ): OperationSnapshot {
-  if (inputs.length < 2) {
+  if (inputs.length < 1) {
     throw new CalculationValidationError(
-      "A operação precisa de pelo menos duas linhas.",
+      "A operação precisa de pelo menos uma linha.",
       "legs",
     );
   }
@@ -134,9 +144,9 @@ export function calculateOperationSnapshot(
     (leg, index) => leg.scenarioId ?? `legacy-${index}`,
   );
   const uniqueScenarios = [...new Set(scenarioKeys)];
-  if (uniqueScenarios.length < 2) {
+  if (uniqueScenarios.length < 1) {
     throw new CalculationValidationError(
-      "A operação precisa de pelo menos dois cenários.",
+      "A operação precisa de pelo menos um cenário.",
       "legs",
     );
   }
@@ -195,7 +205,7 @@ export function calculateOperationSnapshot(
     projectedProfit,
     projectedRoiPercent,
     arbitrageIndex,
-    isSurebet: arbitrageIndex.lt(1),
+    isSurebet: uniqueScenarios.length >= 2 && arbitrageIndex.lt(1),
     roundingPolicy: ROUNDING_POLICY,
     engineVersion: CALCULATION_ENGINE_VERSION,
   };
@@ -211,7 +221,11 @@ export function calculateSettlement(
       "results",
     );
   }
-  if (!results.includes("WON") && !results.includes("VOIDED")) {
+  if (
+    inputs.length > 1 &&
+    !results.includes("WON") &&
+    !results.includes("VOIDED")
+  ) {
     throw new CalculationValidationError(
       "Ao menos uma linha precisa ser vencedora ou devolvida.",
       "results",
