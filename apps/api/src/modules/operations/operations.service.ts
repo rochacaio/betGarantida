@@ -38,6 +38,7 @@ import {
   OperationInsufficientBalanceError,
   OperationIdempotencyConflictError,
   OperationInvalidSettlementError,
+  OperationReopenUnavailableError,
   OperationNotFoundError,
   OperationNotOpenError,
   OperationRecord,
@@ -304,6 +305,28 @@ export class OperationsService {
               dto.version,
               dto.legIds,
             ]),
+          }),
+        ),
+      ),
+    };
+  }
+
+  async reopen(
+    userId: string,
+    id: string,
+    version: number,
+    idempotencyKey: string,
+  ) {
+    this.assertIdempotencyKey(idempotencyKey);
+    return {
+      operation: this.response(
+        await this.execute(() =>
+          this.repository.reopen({
+            userId,
+            operationId: id,
+            version,
+            idempotencyKey,
+            requestHash: this.hash(["REOPEN", id, version]),
           }),
         ),
       ),
@@ -645,6 +668,12 @@ export class OperationsService {
           code: "BET_CREDIT_IN_USE",
           message:
             "Este crédito está vinculado a outra surebet. Exclua primeiro a bet que utilizou o crédito.",
+        });
+      if (error instanceof OperationReopenUnavailableError)
+        throw new ConflictException({
+          code: "OPERATION_REOPEN_UNAVAILABLE",
+          message:
+            "Esta operação não pode ser reaberta porque o crédito gerado já está vinculado a outra aposta.",
         });
       if (error instanceof OperationInvalidSettlementError)
         throw new ConflictException({

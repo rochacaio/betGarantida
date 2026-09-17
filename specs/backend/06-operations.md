@@ -16,7 +16,7 @@
 
 A operação nasce `OPEN`. O frontend começa com duas linhas vazias, mas permite remover uma delas para registrar uma aposta isolada.
 
-Uma operação exige pelo menos dois `scenarioId` distintos. Cada cenário pode ter
+Uma surebet exige pelo menos dois `scenarioId` distintos; uma aposta isolada usa um único cenário. Cada cenário pode ter
 uma perna principal (`groupPosition=0`) e pernas filhas ordenadas. A API aceita
 `scenarioId` ausente como uma perna de cenário exclusivo para compatibilidade.
 
@@ -50,9 +50,15 @@ de ledger a pernas substituídas tornam-se nulas sem apagar os lançamentos.
 
 `POST /operations/:id/cancel` só aceita `OPEN`, exige motivo opcional, estorna stakes em dinheiro, cancela crédito esperado e marca `CANCELLED` atomicamente.
 
+## Reabrir
+
+`POST /operations/:id/reopen` aceita uma operação `SETTLED` ou `WAITING_CREDIT_USE` e exige `version`. Em uma transação serializável, o backend estorna somente os retornos lançados pela última finalização, preserva greens antecipados, restaura créditos consumidos para disponíveis e limpa os resultados finais. A operação volta para `OPEN`.
+
+A reabertura é recusada quando o crédito gerado já está reservado ou consumido por outra operação, ou quando a casa não possui saldo suficiente para retirar o retorno que será estornado. O ledger permanece imutável: são criados lançamentos compensatórios auditáveis.
+
 ## Exclusão e correções
 
-Não há `DELETE` físico para operações com efeitos financeiros. Operações encerradas são imutáveis na primeira versão. Uma correção futura deverá criar revisão e lançamentos compensatórios auditados.
+Não há `DELETE` físico para operações com efeitos financeiros. Exclusões e reaberturas usam lançamentos compensatórios auditados.
 
 ## Validações condicionais
 

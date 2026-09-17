@@ -18,7 +18,11 @@ export type ApiWalletTransaction = {
   amount: string;
   occurredAt: string;
   metadata?: unknown;
-  activity?: "BET_EDIT_REFUND" | "BET_CANCEL_REFUND" | "BET_EDIT_STAKE";
+  activity?:
+    | "BET_EDIT_REFUND"
+    | "BET_CANCEL_REFUND"
+    | "BET_EDIT_STAKE"
+    | "BET_REOPEN_REVERSAL";
   betType?: "BACK" | "LAY";
 };
 export type ApiReservedBalance = {

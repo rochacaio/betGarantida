@@ -96,6 +96,13 @@ export interface OperationsRepository {
     idempotencyKey: string;
     requestHash: string;
   }): Promise<OperationRecord>;
+  reopen(input: {
+    userId: string;
+    operationId: string;
+    version: number;
+    idempotencyKey: string;
+    requestHash: string;
+  }): Promise<OperationRecord>;
   recordEarlyWins(input: {
     userId: string;
     operationId: string;
@@ -154,4 +161,5 @@ export class OperationCreditGrantUnavailableError extends Error {}
 export class OperationCreditExpirationUnavailableError extends Error {}
 export class OperationInvalidSettlementError extends Error {}
 export class OperationDeleteCreditInUseError extends Error {}
+export class OperationReopenUnavailableError extends Error {}
 export class OperationIdempotencyConflictError extends Error {}

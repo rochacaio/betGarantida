@@ -27,6 +27,7 @@ import { DeleteOperationDto } from "./dto/delete-operation.dto";
 import { ExpireGeneratedCreditDto } from "./dto/expire-generated-credit.dto";
 import { GrantGeneratedCreditDto } from "./dto/grant-generated-credit.dto";
 import { RecordEarlyWinsDto } from "./dto/record-early-wins.dto";
+import { ReopenOperationDto } from "./dto/reopen-operation.dto";
 import { UpdateLegNamesDto } from "./dto/update-leg-names.dto";
 
 @ApiTags("operations")
@@ -109,6 +110,16 @@ export class OperationsController {
     @Headers("idempotency-key") idempotencyKey = "",
   ) {
     return this.operations.settle(user.id, id, dto, idempotencyKey);
+  }
+
+  @Post(":id/reopen")
+  reopen(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: ReopenOperationDto,
+    @Headers("idempotency-key") idempotencyKey = "",
+  ) {
+    return this.operations.reopen(user.id, id, dto.version, idempotencyKey);
   }
 
   @Post(":id/early-wins")

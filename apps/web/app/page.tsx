@@ -802,6 +802,7 @@ function SurebetTable({
   onDelete,
   onCreditLost,
   onCreditGranted,
+  onReopen,
 }: {
   surebets: Surebet[];
   bookmakers: Bookmaker[];
@@ -809,6 +810,7 @@ function SurebetTable({
   onDelete?: (s: Surebet) => void;
   onCreditLost?: (s: Surebet) => void;
   onCreditGranted?: (s: Surebet) => void;
+  onReopen?: (s: Surebet) => void;
 }) {
   const visualStatus = (surebet: Surebet) => {
     const hasEarlyWin = surebet.legs.some(
@@ -951,6 +953,17 @@ function SurebetTable({
                           onClick={() => onCreditLost(s)}
                         >
                           Crédito de aposta perdido
+                        </button>
+                      )}
+                    {onReopen &&
+                      (s.status === "SETTLED" ||
+                        s.status === "WAITING_CREDIT_USE") && (
+                        <button
+                          type="button"
+                          className="reopen-operation"
+                          onClick={() => onReopen(s)}
+                        >
+                          Reabrir
                         </button>
                       )}
                     {onDelete && (
@@ -1953,6 +1966,8 @@ const transactionLabels: Record<string, string> = {
   RESERVED_IN: "Recebido do saldo reservado",
 };
 const transactionLabel = (transaction: ApiWalletTransaction) => {
+  if (transaction.activity === "BET_REOPEN_REVERSAL")
+    return "Estorno da finalização";
   if (transaction.activity === "BET_EDIT_REFUND")
     return transaction.betType === "LAY"
       ? "Responsabilidade devolvida para edição"
@@ -2076,6 +2091,7 @@ function Surebets({
   onCreditLost,
   onCreditGranted,
   onEarlyWins,
+  onReopen,
 }: {
   surebets: Surebet[];
   bookmakers: Bookmaker[];
@@ -2084,6 +2100,7 @@ function Surebets({
   onDelete: (s: Surebet) => Promise<void>;
   onCreditLost: (s: Surebet) => Promise<void>;
   onCreditGranted: (s: Surebet) => Promise<void>;
+  onReopen: (s: Surebet) => Promise<void>;
   onEarlyWins: (s: Surebet, legIds: string[]) => Promise<void>;
 }) {
   const [editing, setEditing] = useState<Surebet>();
@@ -2470,6 +2487,14 @@ function Surebets({
                 void onCreditLost(surebet);
             }}
             onCreditGranted={(surebet) => void onCreditGranted(surebet)}
+            onReopen={(surebet) => {
+              if (
+                window.confirm(
+                  `Reabrir a operação "${surebet.event}"? Os valores creditados na finalização serão retirados das respectivas casas.`,
+                )
+              )
+                void onReopen(surebet);
+            }}
           />
           {filteredSurebets.length === 0 && (
             <div className="empty-tab-state">
@@ -3823,6 +3848,23 @@ export default function Home() {
       throw failure;
     }
   };
+  const reopenSurebet = async (surebet: Surebet) => {
+    try {
+      await operationsApi.reopen(surebet);
+      await refresh();
+      showToast(
+        "success",
+        "Operação reaberta",
+        "Os retornos da finalização foram estornados e a bet voltou para Em aberto.",
+      );
+    } catch (failure) {
+      showToast(
+        "error",
+        "Não foi possível reabrir",
+        errorMessage(failure, "Confira os saldos das casas e tente novamente."),
+      );
+    }
+  };
   const body = (() => {
     if (screen === "dashboard")
       return (
@@ -3854,6 +3896,7 @@ export default function Home() {
           onCreditLost={markCreditAsLost}
           onCreditGranted={markCreditAsGranted}
           onEarlyWins={recordEarlyWins}
+          onReopen={reopenSurebet}
         />
       );
     return (

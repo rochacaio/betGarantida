@@ -23,6 +23,7 @@ import {
   OperationIdempotencyConflictError,
   OperationInsufficientBalanceError,
   OperationInvalidSettlementError,
+  OperationReopenUnavailableError,
   OperationNotFoundError,
   OperationNotOpenError,
   OperationsRepository,
@@ -520,7 +521,7 @@ export class PrismaOperationsRepository implements OperationsRepository {
                 result === "VOIDED"
                   ? WalletTransactionType.BET_REFUND
                   : WalletTransactionType.BET_RETURN,
-                `settle:${operation.id}:${leg.id}`,
+                `settle:${operation.id}:${leg.id}:${input.idempotencyKey}`,
               );
             await tx.betLeg.update({
               where: { id: leg.id },
@@ -642,6 +643,191 @@ export class PrismaOperationsRepository implements OperationsRepository {
             input.idempotencyKey,
             input.requestHash,
             "SETTLE",
+          );
+          return tx.operation.findUniqueOrThrow({
+            where: { id: operation.id },
+            include,
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    );
+  }
+
+  reopen(input: {
+    userId: string;
+    operationId: string;
+    version: number;
+    idempotencyKey: string;
+    requestHash: string;
+  }) {
+    return this.serializable(() =>
+      this.prisma.$transaction(
+        async (tx) => {
+          const replay = await this.idempotentReplay(
+            tx,
+            input.userId,
+            input.idempotencyKey,
+            input.requestHash,
+          );
+          if (replay) return replay;
+          await this.lockOperation(tx, input.userId, input.operationId);
+          const operation = await tx.operation.findFirst({
+            where: { id: input.operationId, userId: input.userId },
+            include,
+          });
+          if (!operation) throw new OperationNotFoundError();
+          if (
+            operation.status !== OperationStatus.SETTLED &&
+            operation.status !== OperationStatus.WAITING_CREDIT_USE
+          )
+            throw new OperationReopenUnavailableError();
+          if (operation.version !== input.version)
+            throw new OperationStaleVersionError();
+          if (operation.generatedCredit?.consumerOperationId)
+            throw new OperationReopenUnavailableError();
+
+          const latestSettlement = await tx.operationMutation.findFirst({
+            where: { operationId: operation.id, action: "SETTLE" },
+            orderBy: { createdAt: "desc" },
+          });
+          if (!latestSettlement) throw new OperationReopenUnavailableError();
+          const settlementKeys = operation.legs.flatMap((leg) => [
+            `settle:${operation.id}:${leg.id}:${latestSettlement.idempotencyKey}`,
+            `settle:${operation.id}:${leg.id}`,
+          ]);
+          const settlementTransactions = await tx.walletTransaction.findMany({
+            where: {
+              userId: input.userId,
+              operationId: operation.id,
+              idempotencyKey: { in: settlementKeys },
+              amount: { gt: 0 },
+            },
+          });
+          const reversalByAccount = new Map<string, Prisma.Decimal>();
+          for (const transaction of settlementTransactions)
+            reversalByAccount.set(
+              transaction.bookmakerAccountId,
+              (
+                reversalByAccount.get(transaction.bookmakerAccountId) ??
+                new Prisma.Decimal(0)
+              ).add(transaction.amount),
+            );
+          const accountIds = [...reversalByAccount.keys()];
+          if (accountIds.length)
+            await this.lockAccountIds(tx, input.userId, accountIds);
+          const accounts = await tx.bookmakerAccount.findMany({
+            where: { id: { in: accountIds }, userId: input.userId },
+          });
+          for (const account of accounts) {
+            const reversal = reversalByAccount.get(account.id)!;
+            if (account.cachedBalance.lt(reversal))
+              throw new OperationInsufficientBalanceError(account.id);
+          }
+          for (const [accountId, amount] of reversalByAccount) {
+            await tx.walletTransaction.create({
+              data: {
+                userId: input.userId,
+                bookmakerAccountId: accountId,
+                operationId: operation.id,
+                type: WalletTransactionType.ADJUSTMENT,
+                amount: amount.neg(),
+                idempotencyKey: `reopen:${operation.id}:${input.idempotencyKey}:${accountId}`,
+                metadata: {
+                  activity: "BET_REOPEN_REVERSAL",
+                  reason: "Reabertura de operação",
+                  reversedSettlementMutationId: latestSettlement.id,
+                },
+              },
+            });
+            await tx.bookmakerAccount.update({
+              where: { id: accountId },
+              data: {
+                cachedBalance: { decrement: amount },
+                version: { increment: 1 },
+              },
+            });
+          }
+
+          const earlyWinTransactions = await tx.walletTransaction.findMany({
+            where: {
+              userId: input.userId,
+              operationId: operation.id,
+              idempotencyKey: { startsWith: `early-win:${operation.id}:` },
+            },
+            select: { legId: true },
+          });
+          const earlyWinLegIds = new Set(
+            earlyWinTransactions.flatMap((transaction) =>
+              transaction.legId ? [transaction.legId] : [],
+            ),
+          );
+          for (const leg of operation.legs)
+            await tx.betLeg.update({
+              where: { id: leg.id },
+              data: {
+                result: earlyWinLegIds.has(leg.id)
+                  ? BetLegResult.WON
+                  : BetLegResult.PENDING,
+              },
+            });
+
+          for (const credit of operation.consumedCredits) {
+            await tx.betCredit.update({
+              where: { id: credit.id },
+              data: { status: BetCreditStatus.AVAILABLE, consumedAt: null },
+            });
+            await tx.operation.updateMany({
+              where: {
+                id: credit.sourceOperationId,
+                status: OperationStatus.SETTLED,
+              },
+              data: {
+                status: OperationStatus.WAITING_CREDIT_USE,
+                settledAt: null,
+                version: { increment: 1 },
+              },
+            });
+          }
+
+          if (operation.generatedCredit) {
+            const grantedEarly = await tx.auditLog.findFirst({
+              where: {
+                userId: input.userId,
+                resourceType: "BET_CREDIT",
+                resourceId: operation.generatedCredit.id,
+                action: "BET_CREDIT_GRANTED_EARLY",
+              },
+            });
+            if (!grantedEarly)
+              await tx.betCredit.update({
+                where: { id: operation.generatedCredit.id },
+                data: {
+                  status: BetCreditStatus.EXPECTED,
+                  grantedAmount: null,
+                  consumedAt: null,
+                },
+              });
+          }
+
+          await tx.operation.update({
+            where: { id: operation.id },
+            data: {
+              status: OperationStatus.OPEN,
+              settledAt: null,
+              realizedReturn: null,
+              realizedProfit: null,
+              realizedRoiPercent: null,
+              version: { increment: 1 },
+            },
+          });
+          await this.recordMutation(
+            tx,
+            input.userId,
+            operation.id,
+            input.idempotencyKey,
+            input.requestHash,
+            "REOPEN",
           );
           return tx.operation.findUniqueOrThrow({
             where: { id: operation.id },

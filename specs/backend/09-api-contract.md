@@ -46,6 +46,7 @@ GET  /operations/:id
 PATCH /operations/:id
 POST /operations/:id/cancel
 POST /operations/:id/settle
+POST /operations/:id/reopen
 
 GET  /bet-credits?status=AVAILABLE
 GET  /dashboard/monthly?month=2026-08

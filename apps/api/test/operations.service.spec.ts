@@ -109,6 +109,7 @@ describe("OperationsService", () => {
       list: jest.fn(),
       cancel: jest.fn(),
       settle: jest.fn(),
+      reopen: jest.fn(),
       recordEarlyWins: jest.fn(),
       grantGeneratedCredit: jest.fn(),
       correctGeneratedCredit: jest.fn(),
@@ -556,6 +557,24 @@ describe("OperationsService", () => {
     expect(repository.settle.mock.calls[0]?.[0].legs).toEqual([
       { legId: leg.id, result: BetLegResult.LOST },
     ]);
+  });
+
+  it("reabre uma operação usando versão e idempotência", async () => {
+    repository.reopen.mockResolvedValue({
+      ...record(),
+      status: OperationStatus.OPEN,
+      version: 3,
+    });
+    const result = await service.reopen(userId, operationId, 2, idempotencyKey);
+    expect(result.operation.status).toBe(OperationStatus.OPEN);
+    expect(repository.reopen.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        userId,
+        operationId,
+        version: 2,
+        idempotencyKey,
+      }),
+    );
   });
 
   it("aceita liquidação com linha devolvida sem green", async () => {

@@ -248,4 +248,97 @@ run("operações financeiras com PostgreSQL real", () => {
       }),
     ).toMatchObject({ betCreditId: credit.id });
   });
+
+  it("reabre atomicamente e permite liquidar novamente", async () => {
+    const balanceBefore = (
+      await prisma.bookmakerAccount.findUniqueOrThrow({
+        where: { id: accountIds[0] },
+      })
+    ).cachedBalance;
+    const snapshot = calculateOperationSnapshot([{ stake: "50", odd: "2" }]);
+    const created = await repository.create({
+      userId,
+      eventName: "Aposta reaberta",
+      generatesBetCredit: false,
+      realCashInvestment: new Prisma.Decimal(
+        snapshot.realCashInvestment.toString(),
+      ),
+      promotionalStake: new Prisma.Decimal(0),
+      protectedReturn: new Prisma.Decimal(snapshot.protectedReturn.toString()),
+      projectedProfit: new Prisma.Decimal(snapshot.projectedProfit.toString()),
+      projectedRoiPercent: new Prisma.Decimal(
+        snapshot.projectedRoiPercent.toString(),
+      ),
+      engineVersion: snapshot.engineVersion,
+      calculationSnapshot: serializeDecimals(snapshot) as Prisma.InputJsonValue,
+      idempotencyKey: `create:${randomUUID()}`,
+      requestHash: "c".repeat(64),
+      legs: snapshot.legs.map((leg) => ({
+        scenarioId: randomUUID(),
+        groupPosition: 0,
+        bookmakerAccountId: accountIds[0],
+        betType: leg.betType,
+        stake: new Prisma.Decimal(leg.stake.toString()),
+        riskAmount: new Prisma.Decimal(leg.riskAmount.toString()),
+        odd: new Prisma.Decimal(leg.odd.toString()),
+        commissionPercent: new Prisma.Decimal(0),
+        cashbackPercent: new Prisma.Decimal(0),
+        increasePercent: new Prisma.Decimal(0),
+        usesBetCredit: false,
+        usesFreeBetCredit: false,
+        profitFactor: new Prisma.Decimal(leg.profitFactor.toString()),
+        effectiveOdd: new Prisma.Decimal(leg.effectiveOdd.toString()),
+        projectedPayout: new Prisma.Decimal(leg.projectedPayout.toString()),
+        scenarioResult: new Prisma.Decimal(leg.scenarioResult.toString()),
+      })),
+    });
+    const firstSettlement = await repository.settle({
+      userId,
+      operationId: created.id,
+      version: created.version,
+      legs: [{ legId: created.legs[0].id, result: "WON" }],
+      idempotencyKey: `settle:${randomUUID()}`,
+      requestHash: "d".repeat(64),
+    });
+    const firstReopen = await repository.reopen({
+      userId,
+      operationId: created.id,
+      version: firstSettlement.version,
+      idempotencyKey: `reopen:${randomUUID()}`,
+      requestHash: "e".repeat(64),
+    });
+    expect(firstReopen).toMatchObject({ status: "OPEN" });
+    expect(firstReopen.legs[0].result).toBe("PENDING");
+    expect(
+      (
+        await prisma.bookmakerAccount.findUniqueOrThrow({
+          where: { id: accountIds[0] },
+        })
+      ).cachedBalance.toFixed(2),
+    ).toBe(balanceBefore.minus(50).toFixed(2));
+
+    const secondSettlement = await repository.settle({
+      userId,
+      operationId: created.id,
+      version: firstReopen.version,
+      legs: [{ legId: created.legs[0].id, result: "WON" }],
+      idempotencyKey: `settle:${randomUUID()}`,
+      requestHash: "f".repeat(64),
+    });
+    const secondReopen = await repository.reopen({
+      userId,
+      operationId: created.id,
+      version: secondSettlement.version,
+      idempotencyKey: `reopen:${randomUUID()}`,
+      requestHash: "0".repeat(64),
+    });
+    expect(secondReopen.status).toBe("OPEN");
+    expect(
+      (
+        await prisma.bookmakerAccount.findUniqueOrThrow({
+          where: { id: accountIds[0] },
+        })
+      ).cachedBalance.toFixed(2),
+    ).toBe(balanceBefore.minus(50).toFixed(2));
+  });
 });

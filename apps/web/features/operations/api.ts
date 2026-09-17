@@ -109,6 +109,12 @@ export const operationsApi = {
         grantedCreditAmount,
       }),
     }),
+  reopen: (operation: { id: string; version: number }) =>
+    api<{ operation: ApiOperation }>(`/operations/${operation.id}/reopen`, {
+      method: "POST",
+      headers: commandHeaders(),
+      body: JSON.stringify({ version: operation.version }),
+    }),
   recordEarlyWins: (
     operation: { id: string; version: number },
     legIds: string[],
